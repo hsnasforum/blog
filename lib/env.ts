@@ -24,6 +24,7 @@ const envSchema = z.object({
   REDDIT_BEARER_TOKEN: z.string().optional(),
   REDDIT_SUBREDDIT_WHITELIST: z.string().optional(),
   STACKEXCHANGE_SITE: z.string().default("stackoverflow"),
+  STACK_EXCHANGE_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse({
@@ -40,6 +41,7 @@ const parsed = envSchema.safeParse({
   REDDIT_BEARER_TOKEN: process.env.REDDIT_BEARER_TOKEN,
   REDDIT_SUBREDDIT_WHITELIST: process.env.REDDIT_SUBREDDIT_WHITELIST,
   STACKEXCHANGE_SITE: process.env.STACKEXCHANGE_SITE,
+  STACK_EXCHANGE_KEY: process.env.STACK_EXCHANGE_KEY,
 });
 
 if (!parsed.success) {

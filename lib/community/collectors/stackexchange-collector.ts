@@ -39,6 +39,9 @@ export class StackExchangeCollector implements CommunityCollector {
       url.searchParams.set("site", env.STACKEXCHANGE_SITE);
       url.searchParams.set("pagesize", "10");
       url.searchParams.set("fromdate", String(unixSeconds(daysAgo(30))));
+      if (env.STACK_EXCHANGE_KEY) {
+        url.searchParams.set("key", env.STACK_EXCHANGE_KEY);
+      }
 
       const response = await fetch(url);
       if (!response.ok) {

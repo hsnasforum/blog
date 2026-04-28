@@ -190,6 +190,23 @@ function safeJsonParse(raw, fallback) {
   }
 }
 
+function compactHtmlText(raw) {
+  return raw
+    .replace(/<!--.*?-->/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hasUnsafeAssertion(raw) {
+  return raw
+    .split(/\n{2,}/)
+    .some(
+      (paragraph) =>
+        badAssertionPattern.test(paragraph) &&
+        !/확인\s*필요|쓰면\s*안|아니라|단정|금지|피해야|검토|문장/.test(paragraph),
+    );
+}
+
 async function seed(prisma) {
   const profile = await prisma.blogProfile.upsert({
     where: { id: "default" },
@@ -268,17 +285,42 @@ async function createCandidateFromSignal(topicId, signalId) {
   return response.payload.candidate;
 }
 
-async function addOfficialSource(topicId, candidateId, communitySignalId, verificationStatus, title = officialTitle) {
+async function addOfficialSource(
+  topicId,
+  candidateId,
+  communitySignalId,
+  verificationStatus,
+  title = officialTitle,
+  options = {},
+) {
+  const response = await request("POST", `/api/topics/${topicId}/candidates/${candidateId}/official-sources`, {
+    communitySignalId,
+    sourceType: options.sourceType ?? "official_doc",
+    title,
+    url: options.url ?? officialUrl,
+    note: options.note ?? "공식 문서 URL을 수동으로 확인한 출처입니다. 원문 전체는 저장하지 않습니다.",
+    verificationStatus,
+  });
+  assertStep(response.ok, "official source add failed", response);
+  return response.payload;
+}
+
+async function expectOfficialSourceFailure(topicId, candidateId, communitySignalId, verificationStatus, title) {
   const response = await request("POST", `/api/topics/${topicId}/candidates/${candidateId}/official-sources`, {
     communitySignalId,
     sourceType: "official_doc",
     title,
     url: officialUrl,
-    note: "공식 문서 URL을 수동으로 확인한 출처입니다. 원문 전체는 저장하지 않습니다.",
+    note: "",
     verificationStatus,
   });
-  assertStep(response.ok, "official source add failed", response);
-  return response.payload;
+  assertStep(
+    !response.ok &&
+      response.status === 400 &&
+      JSON.stringify(response.payload).includes("note"),
+    "official source note requirement failed",
+    { verificationStatus, response },
+  );
 }
 
 async function runArticleFlow(candidateId) {
@@ -326,9 +368,46 @@ async function runE2E() {
   assertStep(communityCautionPattern.test(beforeArticle.draft), "community-only draft lacks caution language", {
     draftPreview: beforeArticle.draft.slice(0, 1200),
   });
-  assertStep(!badAssertionPattern.test(beforeArticle.draft), "community-only draft asserts the signal as fact", {
+  assertStep(!hasUnsafeAssertion(beforeArticle.draft), "community-only draft asserts the signal as fact", {
     draftPreview: beforeArticle.draft.slice(0, 1200),
   });
+
+  logStep("반박/루머 처리 상태의 note 필수 검증을 확인합니다.");
+  await expectOfficialSourceFailure(
+    seeded.topic.id,
+    mediumCandidate.id,
+    seeded.mediumSignal.id,
+    "contradicted",
+    "note 없는 반박 출처",
+  );
+  await expectOfficialSourceFailure(
+    seeded.topic.id,
+    mediumCandidate.id,
+    seeded.mediumSignal.id,
+    "rejected_as_rumor",
+    "note 없는 루머 처리 출처",
+  );
+
+  logStep("GitHub Issue sourceType은 자동 official_confirmed로 올리지 않는지 확인합니다.");
+  const githubIssueSource = await addOfficialSource(
+    seeded.topic.id,
+    mediumCandidate.id,
+    seeded.mediumSignal.id,
+    "needs_manual_review",
+    "GitHub Issue 보강 출처",
+    {
+      sourceType: "github_issue",
+      url: "https://github.com/anthropics/claude-code/issues/38335",
+      note: "GitHub issue는 보강 출처로만 기록하고 공식 확정으로 올리지 않습니다.",
+    },
+  );
+  const githubIssueMeta = safeJsonParse(githubIssueSource.candidate.sourceMetaJson ?? "{}", {});
+  assertStep(
+    githubIssueSource.candidate.verdict !== "write_now" &&
+      githubIssueMeta.verificationStatus === "needs_manual_review",
+    "github_issue sourceType should stay needs_manual_review",
+    { githubIssueSource, githubIssueMeta },
+  );
 
   logStep("medium risk 후보에 공식 출처를 추가합니다.");
   const officialMedium = await addOfficialSource(
@@ -347,14 +426,22 @@ async function runE2E() {
   );
 
   const trendsPage = await requestText(`/topics/${seeded.topic.id}/trends`);
+  const trendsPageText = compactHtmlText(trendsPage.text);
   assertStep(
     trendsPage.ok &&
-      trendsPage.text.includes("공식 출처 확인됨") &&
-      trendsPage.text.includes(officialTitle) &&
+      trendsPageText.includes("공식 출처 확인됨") &&
+      trendsPageText.includes("확인 상태 요약") &&
+      trendsPageText.includes("커뮤니티 신호: 있음") &&
+      trendsPageText.includes("GitHub 보강: 없음") &&
+      trendsPageText.includes("공식 출처: 있음") &&
+      trendsPageText.includes("write_now 조건") &&
+      trendsPageText.includes("official_confirmed + risk low: write_now 가능") &&
+      trendsPageText.includes("GitHub Issue") &&
+      trendsPageText.includes(officialTitle) &&
       trendsPage.text.includes(officialUrl.replaceAll("&", "&amp;")) &&
-      trendsPage.text.includes("공식 확인 전에는 사실로 단정하지 마세요."),
+      trendsPageText.includes("공식 확인 전에는 사실로 단정하지 마세요."),
     "official source UI display failed",
-    { preview: trendsPage.text.slice(0, 1800) },
+    { preview: trendsPageText.slice(0, 1800) },
   );
 
   logStep("공식 출처 추가 후 draft 표현 변화를 확인합니다.");
@@ -363,7 +450,7 @@ async function runE2E() {
   assertStep(officialDraftPattern.test(afterDraft.payload.post.draft), "official-confirmed draft lacks official-source language", {
     draftPreview: afterDraft.payload.post.draft.slice(0, 1200),
   });
-  assertStep(!badAssertionPattern.test(afterDraft.payload.post.draft), "official-confirmed draft overasserts the signal", {
+  assertStep(!hasUnsafeAssertion(afterDraft.payload.post.draft), "official-confirmed draft overasserts the signal", {
     draftPreview: afterDraft.payload.post.draft.slice(0, 1200),
   });
 

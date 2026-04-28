@@ -20,6 +20,8 @@ process.env.OPENAI_BASE_URL = providerBaseUrl;
 process.env.OPENAI_API_KEY ||= "dummy-for-local-proxy";
 process.env.WRITER_MODEL = providerModel;
 process.env.WRITER_REASONING_EFFORT = reasoningEffort;
+process.env.GITHUB_ISSUES_COLLECTOR_MODE = "mock";
+process.env.GITHUB_TOKEN = "";
 
 const cleanupDb = process.env.E2E_CLEANUP_DB !== "0";
 const timeoutMs = Number(process.env.E2E_TIMEOUT_MS ?? 240_000);
@@ -429,6 +431,17 @@ async function runE2E() {
     sourceMeta,
   );
 
+  logStep("GitHub Issues 보강 신호를 연결합니다.");
+  const githubBoost = await request("POST", `/api/topics/${seeded.topic.id}/candidates/${candidate.id}/collect-github-issues`);
+  assertStep(
+    githubBoost.ok &&
+      githubBoost.payload.signalCount >= 1 &&
+      githubBoost.payload.candidate?.verdict !== "write_now" &&
+      githubBoost.payload.signals.every((signal) => signal.verificationStatus === "needs_manual_review"),
+    "GitHub Issues boost before article generation failed",
+    githubBoost,
+  );
+
   logStep("Post와 outline/draft/review/SEO를 생성합니다.");
   const postResponse = await request("POST", "/api/posts/from-candidate", { candidateId: candidate.id });
   assertStep(postResponse.ok && postResponse.payload.generationStatus === "success", "post create failed", postResponse);
@@ -478,6 +491,12 @@ async function runE2E() {
     title,
     draftPreview: draft.slice(0, 1200),
   });
+  assertStep(
+    /GitHub|깃허브|이슈/.test(draft) &&
+      !/GitHub[^.\n]{0,80}(공식\s*확인됨|공식적으로\s*확인|확정)/i.test(draft),
+    "draft should mention GitHub issue reinforcement without treating it as official confirmation",
+    { draftPreview: draft.slice(0, 1600) },
+  );
   assertStep(
     /공식\s*출처\s*확인\s*필요|공식\s*확인\s*필요|공식\s*출처|공식\s*확인/.test(reviewReport),
     "reviewReport does not separate official-source checks",
@@ -562,6 +581,7 @@ async function runE2E() {
       verificationStatus: sourceMeta.verificationStatus,
       riskLevel: sourceMeta.riskLevel,
       sourceMetaJsonSafe: true,
+      githubBoostSignalCount: githubBoost.payload.signalCount,
     },
     article: {
       title,

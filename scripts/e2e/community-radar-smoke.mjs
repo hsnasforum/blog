@@ -11,6 +11,8 @@ const port = Number(process.env.E2E_COMMUNITY_PORT ?? 3032);
 const appBaseUrl = `http://127.0.0.1:${port}`;
 process.env.DATABASE_URL ||= "file:./community-e2e.db";
 process.env.COMMUNITY_COLLECTOR_MODE = "mock";
+process.env.GITHUB_ISSUES_COLLECTOR_MODE = "mock";
+process.env.GITHUB_TOKEN = "";
 const previewFixturePaths = [
   path.join(projectRoot, "manual-fixtures/dcinside-info-preview-latest.json"),
   path.join(projectRoot, "manual-fixtures/dcinside-best-preview-latest.json"),
@@ -652,6 +654,80 @@ try {
       trendsPage.includes(sourceSignal.verificationStatus),
     "community sourceMeta UI display failed",
     { preview: trendsPage.slice(0, 1800), sourceMeta },
+  );
+
+  logStep("DCInside 후보를 GitHub Issues로 보강 검색합니다.");
+  const githubReinforcement = await request(
+    "POST",
+    `/api/topics/${seeded.topic.id}/candidates/${candidateFromSignal.payload.candidate.id}/collect-github-issues`,
+  );
+  const githubIssueSignals = githubReinforcement.payload.signals.filter(
+    (signal) => signal.sourceType === "github_issues",
+  );
+  const uniqueGithubIssueUrls = new Set(githubIssueSignals.map((signal) => signal.url));
+  assertStep(
+    githubReinforcement.ok &&
+      githubReinforcement.payload.signalCount >= 1 &&
+      githubIssueSignals.length === uniqueGithubIssueUrls.size &&
+      githubReinforcement.payload.warnings?.some((warning) => warning.includes("GITHUB_TOKEN")) &&
+      githubReinforcement.payload.candidate?.verdict !== "write_now",
+    "GitHub Issues reinforcement failed",
+    { githubReinforcement, githubIssueSignals },
+  );
+  const githubIssueSignal = githubIssueSignals[0];
+  const githubIssueMeta = JSON.parse(githubIssueSignal?.rawMetaJson ?? "{}");
+  assertStep(
+    githubIssueSignal?.title &&
+      githubIssueSignal.url?.includes("github.com/anthropics/claude-code/issues/42") &&
+      githubIssueSignal.commentCount === 18 &&
+      githubIssueSignal.reactionCount === 7 &&
+      githubIssueSignal.externalId === "anthropics/claude-code#42" &&
+      githubIssueSignal.canonicalUrl === "https://github.com/anthropics/claude-code/issues/42" &&
+      githubIssueSignal.verificationStatus === "needs_manual_review" &&
+      githubIssueSignal.confidence === "medium" &&
+      githubIssueMeta.repository === "anthropics/claude-code" &&
+      githubIssueMeta.repositoryUrl === "https://api.github.com/repos/anthropics/claude-code" &&
+      githubIssueMeta.githubIssueId === 101 &&
+      githubIssueMeta.nodeId === "MOCK_github_issue_101" &&
+      githubIssueMeta.htmlUrl === "https://github.com/anthropics/claude-code/issues/42" &&
+      githubIssueMeta.comments === 18 &&
+      githubIssueMeta.reactionsTotalCount === 7 &&
+      githubIssueMeta.externalId === "anthropics/claude-code#42" &&
+      githubIssueMeta.metadataOnly === true &&
+      !/body|commentBody|rawHtml|originalHtml|<script|<iframe|onerror|javascript:/i.test(
+        JSON.stringify(githubIssueSignal),
+      ),
+    "GitHub issue signal metadata failed",
+    { githubIssueSignal, githubIssueMeta },
+  );
+  const githubCollectorSource = readFileSync(
+    path.join(projectRoot, "lib/community/collectors/github/github-issues-collector.ts"),
+    "utf8",
+  );
+  assertStep(
+    githubCollectorSource.includes("buildGitHubIssueSearchQueries") &&
+      githubCollectorSource.includes("GITHUB_ISSUES_SEARCH_FACETS") &&
+      !githubCollectorSource.includes(" OR "),
+    "GitHub issue query split source check failed",
+    {},
+  );
+  assertStep(
+    githubReinforcement.payload.candidate?.scoringBasis === "external_data" &&
+      githubReinforcement.payload.candidate?.confidence === "medium" &&
+      githubReinforcement.payload.candidate?.scoringReason?.includes("GitHub Issues 보강 신호"),
+    "GitHub cross-source score reflection failed",
+    githubReinforcement.payload.candidate,
+  );
+  const trendsPageAfterGithub = await fetch(`${appBaseUrl}/topics/${seeded.topic.id}/trends`).then((response) =>
+    response.text(),
+  );
+  assertStep(
+      trendsPageAfterGithub.includes("GitHub Issues로 보강 검색") &&
+      trendsPageAfterGithub.includes("GitHub Issues 보강 신호") &&
+      trendsPageAfterGithub.includes("anthropics/claude-code") &&
+      trendsPageAfterGithub.includes("GitHub 이슈 보강 신호입니다. 공식 repo 여부와 문서/릴리즈 확인이 필요할 수 있습니다."),
+    "GitHub issue UI display failed",
+    { preview: trendsPageAfterGithub.slice(0, 2200) },
   );
 
   logStep("수동 커뮤니티 소스를 추가합니다.");

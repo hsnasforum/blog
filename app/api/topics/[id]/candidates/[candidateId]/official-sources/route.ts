@@ -14,6 +14,15 @@ const officialSourceSchema = z.object({
   url: z.string().url("url 형식이 올바르지 않습니다."),
   note: z.string().max(1000).optional().nullable(),
   verificationStatus: z.enum(officialVerificationStatuses),
+}).superRefine((value, ctx) => {
+  const note = value.note?.trim() ?? "";
+  if ((value.verificationStatus === "contradicted" || value.verificationStatus === "rejected_as_rumor") && !note) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["note"],
+      message: "반박됨 또는 루머 처리됨 상태로 저장하려면 note에 근거를 남겨주세요.",
+    });
+  }
 });
 
 export async function POST(

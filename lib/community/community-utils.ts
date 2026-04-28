@@ -54,6 +54,10 @@ export function classifySignalType(text: string): CommunitySignalType {
     return "rumor";
   }
   if (/가격|과금|정액제|종량제|결제|pricing|subscription|billing/.test(normalized)) return "pricing_change";
+  if (/breaking[-_\s]?change|breaking|regression|deprecat|major\s*change|호환성|회귀|깨짐/.test(normalized)) {
+    return "breaking_change";
+  }
+  if (/documentation|docs|readme|guide|문서|가이드|예제/.test(normalized)) return "documentation_issue";
   if (/완전\s*섭종|섭종|서비스\s*종료|제공\s*중단|중단|지원\s*종료|shutdown|sunset|discontinued/.test(normalized)) {
     return "service_change";
   }

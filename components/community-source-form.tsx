@@ -17,6 +17,8 @@ const signalTypeLabels: Record<(typeof communitySignalTypes)[number], string> = 
   beginner_confusion: "초보자 혼란",
   operational_issue: "운영상 문제",
   bug_report: "버그/회귀",
+  documentation_issue: "문서/가이드 문제",
+  breaking_change: "호환성 변경",
   rumor: "루머 가능성",
   product_update: "제품 업데이트",
   early_news: "조기 소식",

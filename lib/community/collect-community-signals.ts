@@ -9,6 +9,8 @@ import { StackExchangeCollector } from "@/lib/community/collectors/stackexchange
 import { scoreCommunityHeat } from "@/lib/community/community-scorer";
 import type { CommunitySignalInput } from "@/lib/community/community-types";
 import { isSafeHttpUrl } from "@/lib/community/community-utils";
+import { parseTrendCandidateSourceMeta } from "@/lib/community/source-meta";
+import { GITHUB_ISSUES_COLLECTOR_MODEL } from "@/lib/community/collectors/github/github-types";
 import { MockCommunityCollector } from "@/lib/community/mock-community-collector";
 
 function summarize(text: string, max = 500) {
@@ -37,7 +39,7 @@ function getCollectors(): CommunityCollector[] {
   ];
 }
 
-function createSignalData(signal: CommunitySignalInput): Prisma.CommunitySignalCreateManyInput {
+export function createSignalData(signal: CommunitySignalInput): Prisma.CommunitySignalCreateManyInput {
   return {
     topicId: signal.topicId ?? null,
     candidateId: signal.candidateId ?? null,
@@ -67,6 +69,24 @@ function createSignalData(signal: CommunitySignalInput): Prisma.CommunitySignalC
     status: signal.status ?? "success",
     errorMessage: signal.errorMessage ?? null,
   };
+}
+
+function splitTopicKeywords(value: string | null | undefined) {
+  return (value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function sourceTitlesForCandidate(candidate: {
+  sourceMetaJson: string | null;
+  communitySignals: Array<{ title: string }>;
+}) {
+  const sourceMeta = parseTrendCandidateSourceMeta(candidate.sourceMetaJson);
+  return [
+    sourceMeta?.signalTitle,
+    ...candidate.communitySignals.map((signal) => signal.title),
+  ].filter((title): title is string => Boolean(title));
 }
 
 export async function rescoreCommunityCandidate(candidateId: string) {
@@ -199,6 +219,7 @@ export async function collectCommunitySignalsForTopic(topicId: string) {
       const result = await collector.collect({
         id: candidate.id,
         keyword: candidate.keyword,
+        optionalKeywords: splitTopicKeywords(topic.optionalKeywords),
       });
       signals.push(
         ...result.signals.map((signal) => ({
@@ -295,5 +316,97 @@ export async function collectCommunitySignalsForTopic(topicId: string) {
         : warnings.length > 0
           ? "일부 커뮤니티 수집기가 실패했습니다. 성공한 신호만 반영했습니다."
           : null,
+  };
+}
+
+export async function collectGitHubIssuesForCandidate(topicId: string, candidateId: string) {
+  const candidate = await prisma.trendCandidate.findUnique({
+    where: { id: candidateId },
+    include: {
+      topic: true,
+      communitySignals: true,
+    },
+  });
+
+  if (!candidate || candidate.topicId !== topicId) {
+    return {
+      ok: false as const,
+      status: 404,
+      error: "해당 토픽의 후보를 찾을 수 없습니다.",
+    };
+  }
+
+  const collector = new GitHubIssuesCollector();
+  const result = await collector.collect({
+    id: candidate.id,
+    keyword: candidate.keyword,
+    optionalKeywords: splitTopicKeywords(candidate.topic.optionalKeywords),
+    sourceTitles: sourceTitlesForCandidate(candidate),
+  });
+  const signals = result.signals.map((signal) => ({
+    ...signal,
+    topicId,
+    candidateId: candidate.id,
+  }));
+
+  if (signals.length > 0) {
+    await prisma.$transaction(async (tx) => {
+      await tx.communitySignal.deleteMany({
+        where: {
+          candidateId: candidate.id,
+          sourceType: "github_issues",
+        },
+      });
+
+      await tx.communitySignal.createMany({
+        data: signals.map(createSignalData),
+      });
+    });
+  }
+
+  const score = signals.length > 0 ? await rescoreCommunityCandidate(candidate.id) : null;
+  const status = signals.length > 0 ? "success" : "failed";
+  const warning =
+    signals.length === 0
+      ? "관련 GitHub Issue를 찾지 못했습니다. 기존 커뮤니티 조기 신호 점수를 유지했습니다."
+      : result.warnings.length > 0
+        ? result.warnings.join(" / ")
+        : null;
+
+  await prisma.generationLog.create({
+    data: {
+      action: "collectGitHubIssuesForCandidate",
+      provider: "github",
+      model: GITHUB_ISSUES_COLLECTOR_MODEL,
+      inputSummary: `candidate=${candidate.keyword}, optionalKeywords=${splitTopicKeywords(candidate.topic.optionalKeywords).join(", ")}`,
+      outputSummary: `signals=${signals.length}, scoreUpdated=${Boolean(score)}`,
+      status,
+      generationStatus: status,
+      errorMessage: warning ? summarize(warning) : null,
+    },
+  });
+
+  const updatedCandidate = await prisma.trendCandidate.findUnique({
+    where: { id: candidate.id },
+    include: {
+      communitySignals: {
+        orderBy: [{ collectedAt: "desc" }],
+      },
+      trendSignals: true,
+      officialSources: {
+        orderBy: [{ addedAt: "desc" }],
+      },
+    },
+  });
+
+  return {
+    ok: true as const,
+    collectionStatus: signals.length > 0 ? (result.warnings.length > 0 ? "partial" : "success") : "failed",
+    candidate: updatedCandidate,
+    signalCount: signals.length,
+    signals,
+    warnings: result.warnings,
+    warning,
+    score,
   };
 }

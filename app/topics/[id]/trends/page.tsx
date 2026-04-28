@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CreatePostButton } from "@/components/create-post-button";
+import { GitHubIssuesCollectButton } from "@/components/github-issues-collect-button";
 import { OfficialSourceForm } from "@/components/official-source-form";
 import { TrendActions } from "@/components/trend-actions";
 import { COMMUNITY_SOURCE_META_WARNING, parseTrendCandidateSourceMeta } from "@/lib/community/source-meta";
@@ -9,6 +10,7 @@ import {
   OFFICIAL_SOURCE_NOTICE,
   officialSourceTypeLabels,
   officialVerificationStatusLabels,
+  officialWriteNowRules,
   type OfficialSourceType,
   type OfficialVerificationStatus,
 } from "@/lib/official-source/official-source-types";
@@ -92,6 +94,37 @@ function parseLinks(raw: string | null): Array<{ title: string; link: string; pu
   }
 }
 
+function parseCommunityRawMeta(raw: string | null): {
+  repository?: string;
+  issueNumber?: number;
+  updatedAt?: string;
+  labels?: string[];
+  searchQuery?: string;
+  matchedQueries?: string[];
+  relevanceScore?: number;
+} {
+  if (!raw) return {};
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return {};
+    const record = parsed as Record<string, unknown>;
+    return {
+      repository: record.repository ? String(record.repository) : undefined,
+      issueNumber: typeof record.issueNumber === "number" ? record.issueNumber : undefined,
+      updatedAt: record.updatedAt ? String(record.updatedAt) : undefined,
+      labels: Array.isArray(record.labels) ? record.labels.map((label) => String(label)).filter(Boolean) : undefined,
+      searchQuery: record.searchQuery ? String(record.searchQuery) : undefined,
+      matchedQueries: Array.isArray(record.matchedQueries)
+        ? record.matchedQueries.map((query) => String(query)).filter(Boolean)
+        : undefined,
+      relevanceScore: typeof record.relevanceScore === "number" ? record.relevanceScore : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
 function communitySourceLabel(sourceType: string) {
   if (sourceType === "manual") return "수동 입력 출처";
   if (sourceType === "hacker_news") return "Hacker News";
@@ -99,6 +132,17 @@ function communitySourceLabel(sourceType: string) {
   if (sourceType === "stackexchange") return "Stack Exchange";
   if (sourceType === "reddit") return "Reddit";
   return sourceType;
+}
+
+function currentVerificationStatus(
+  officialSources: Array<{ verificationStatus: string }>,
+  sourceMetaStatus?: string | null,
+) {
+  if (officialSources.some((source) => source.verificationStatus === "rejected_as_rumor")) return "rejected_as_rumor";
+  if (officialSources.some((source) => source.verificationStatus === "contradicted")) return "contradicted";
+  if (officialSources.some((source) => source.verificationStatus === "official_confirmed")) return "official_confirmed";
+  if (officialSources.some((source) => source.verificationStatus === "needs_manual_review")) return "needs_manual_review";
+  return sourceMetaStatus ?? "community_only";
 }
 
 export default async function TrendScoutPage({ params }: { params: { id: string } }) {
@@ -219,6 +263,7 @@ export default async function TrendScoutPage({ params }: { params: { id: string 
                 const signals = candidate.trendSignals;
                 const links = signals.flatMap((signal) => parseLinks(signal.linksJson)).slice(0, 3);
                 const communitySignals = candidate.communitySignals;
+                const githubIssueSignals = communitySignals.filter((signal) => signal.sourceType === "github_issues");
                 const communityLinks = communitySignals.slice(0, 3).map((signal) => ({
                   title: signal.title,
                   link: signal.url,
@@ -232,6 +277,10 @@ export default async function TrendScoutPage({ params }: { params: { id: string 
                 const hasRumor = communitySignals.some((signal) => signal.signalType === "rumor");
                 const hasManual = communitySignals.some((signal) => signal.sourceType === "manual");
                 const failedSignals = signals.filter((signal) => signal.status === "failed");
+                const verificationStatus = currentVerificationStatus(
+                  candidate.officialSources,
+                  sourceMeta?.verificationStatus,
+                );
                 const officialConfirmed = candidate.officialSources.some(
                   (source) => source.verificationStatus === "official_confirmed",
                 );
@@ -286,6 +335,16 @@ export default async function TrendScoutPage({ params }: { params: { id: string 
                         </div>
                       ) : null}
                       <div className="mt-2 max-w-xs rounded-md border border-slate-200 bg-white p-2 text-xs leading-5 text-slate-700">
+                        <div className="mb-2 rounded-md border border-slate-100 bg-slate-50 p-2">
+                          <p className="font-semibold text-slate-800">확인 상태 요약</p>
+                          <div className="mt-1 grid grid-cols-2 gap-1">
+                            <p>커뮤니티 신호: {communitySignals.length > 0 ? "있음" : "없음"}</p>
+                            <p>GitHub 보강: {githubIssueSignals.length > 0 ? "있음" : "없음"}</p>
+                            <p>공식 출처: {candidate.officialSources.length > 0 ? "있음" : "없음"}</p>
+                            <p>verdict: {candidate.verdict ?? "unscored"}</p>
+                          </div>
+                          <p className="mt-1">verificationStatus: {verificationStatus}</p>
+                        </div>
                         <div className="flex flex-wrap gap-1">
                           {officialConfirmed ? (
                             <span className="rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-700">
@@ -304,13 +363,21 @@ export default async function TrendScoutPage({ params }: { params: { id: string 
                           ) : null}
                         </div>
                         <p className="mt-1 font-medium">{OFFICIAL_SOURCE_NOTICE}</p>
+                        <div className="mt-1 rounded border border-slate-100 bg-slate-50 p-1">
+                          <p className="font-medium text-slate-700">write_now 조건</p>
+                          <ul className="mt-1 space-y-0.5 text-slate-500">
+                            {officialWriteNowRules.map((rule) => (
+                              <li key={rule}>{rule}</li>
+                            ))}
+                          </ul>
+                        </div>
                         {candidate.officialSources.length > 0 ? (
                           <div className="mt-2 space-y-1">
                             {candidate.officialSources.map((source) => (
                               <div key={source.id} className="rounded border border-slate-100 bg-slate-50 p-1">
-                                <p className="font-medium">
+                                <span className="inline-flex rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 font-medium text-blue-700">
                                   {officialSourceTypeLabels[source.sourceType as OfficialSourceType] ?? source.sourceType}
-                                </p>
+                                </span>
                                 <a
                                   href={source.url}
                                   target="_blank"
@@ -410,9 +477,56 @@ export default async function TrendScoutPage({ params }: { params: { id: string 
                             {Array.from(new Set(communitySignals.map((signal) => communitySourceLabel(signal.sourceType)))).join(", ")}
                           </p>
                           {hasRumor ? <p className="font-medium text-rose-600">루머 가능성 warning</p> : null}
+                          {sourceMeta?.sourceType === "dcinside" ||
+                          communitySignals.some((signal) => signal.sourceType === "dcinside") ? (
+                            <div className="pt-1">
+                              <GitHubIssuesCollectButton topicId={topic.id} candidateId={candidate.id} />
+                            </div>
+                          ) : null}
+                          {githubIssueSignals.length > 0 ? (
+                            <div className="mt-2 max-w-xs space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2">
+                              <p className="font-semibold text-slate-800">GitHub Issues 보강 신호</p>
+                              <p className="text-slate-600">
+                                GitHub 이슈 보강 신호입니다. 공식 repo 여부와 문서/릴리즈 확인이 필요할 수 있습니다.
+                              </p>
+                              {githubIssueSignals.slice(0, 3).map((signal) => {
+                                const rawMeta = parseCommunityRawMeta(signal.rawMetaJson);
+                                return (
+                                  <div key={signal.id} className="rounded border border-slate-200 bg-white p-1.5">
+                                    <p className="font-medium text-slate-800">
+                                      {rawMeta.repository ?? signal.sourceName}
+                                      {rawMeta.issueNumber ? ` #${rawMeta.issueNumber}` : ""}
+                                    </p>
+                                    <a
+                                      href={signal.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-blue-700 underline-offset-2 hover:underline"
+                                    >
+                                      {signal.title}
+                                    </a>
+                                    <p className="text-slate-500">
+                                      comments {signal.commentCount} / reactions {signal.reactionCount}
+                                      {rawMeta.updatedAt ? ` / updated ${rawMeta.updatedAt.slice(0, 10)}` : ""}
+                                    </p>
+                                    <p className="text-slate-500">
+                                      검색어: {rawMeta.searchQuery ?? rawMeta.matchedQueries?.[0] ?? "-"} / relevance{" "}
+                                      {rawMeta.relevanceScore ?? "-"}
+                                    </p>
+                                    <p className="text-slate-500">verificationStatus: {signal.verificationStatus}</p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : null}
                         </div>
                       ) : (
-                        <span className="text-slate-400">미수집</span>
+                        <div className="space-y-1">
+                          <span className="text-slate-400">미수집</span>
+                          {sourceMeta?.sourceType === "dcinside" ? (
+                            <GitHubIssuesCollectButton topicId={topic.id} candidateId={candidate.id} />
+                          ) : null}
+                        </div>
                       )}
                     </td>
                     <td className="px-2 py-2 text-xs text-slate-700">

@@ -166,6 +166,16 @@ export async function addOfficialSource(input: AddOfficialSourceInput) {
     };
   }
 
+  const note = input.note?.trim() ?? "";
+
+  if ((input.verificationStatus === "contradicted" || input.verificationStatus === "rejected_as_rumor") && !note) {
+    return {
+      ok: false as const,
+      status: 400,
+      error: "반박됨 또는 루머 처리됨 상태로 저장하려면 note에 근거를 남겨주세요.",
+    };
+  }
+
   const candidate = await prisma.trendCandidate.findUnique({
     where: { id: input.candidateId },
     include: {
@@ -202,7 +212,7 @@ export async function addOfficialSource(input: AddOfficialSourceInput) {
       sourceType: input.sourceType,
       title: input.title.trim(),
       url: input.url.trim(),
-      note: input.note?.trim() || null,
+      note: note || null,
       verificationStatus: input.verificationStatus,
     },
   });

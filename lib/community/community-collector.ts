@@ -3,6 +3,8 @@ import type { CommunityCollectResult } from "@/lib/community/community-types";
 export type CommunityCandidateInput = {
   id: string;
   keyword: string;
+  optionalKeywords?: string[];
+  sourceTitles?: string[];
 };
 
 export interface CommunityCollector {

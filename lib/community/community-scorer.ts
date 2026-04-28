@@ -15,6 +15,7 @@ export type CommunityScoreCandidate = {
   differentiationScore: number | null;
   lifespanScore: number | null;
   riskPenalty: number | null;
+  totalScore?: number | null;
 };
 
 export type CommunityHeatScore = {
@@ -75,7 +76,7 @@ function computeVerdict(params: {
 
 function confidenceFromSignals(sourceCount: number, signalCount: number, rumorCount: number): ScoreConfidence {
   if (sourceCount >= 3 && signalCount >= 5 && rumorCount === 0) return "high";
-  if (sourceCount >= 2 && signalCount >= 3) return "medium";
+  if (sourceCount >= 2 && signalCount >= 2) return "medium";
   return "low";
 }
 
@@ -101,7 +102,16 @@ export function scoreCommunityHeat(
       Math.max(0, signal.recommendCount) * 1.5,
     0,
   );
-  const painTypes = new Set(["common_complaint", "beginner_confusion", "operational_issue", "bug_report"]);
+  const painTypes = new Set([
+    "common_complaint",
+    "beginner_confusion",
+    "operational_issue",
+    "bug_report",
+    "documentation_issue",
+    "breaking_change",
+    "pricing_change",
+    "service_change",
+  ]);
   const painSignals = usableSignals.filter((signal) => painTypes.has(signal.signalType));
   const rumorSignals = usableSignals.filter((signal) => signal.signalType === "rumor");
   const highRiskSignals = usableSignals.filter((signal) => signal.riskLevel === "high");
@@ -132,7 +142,12 @@ export function scoreCommunityHeat(
     differentiationScore +
     lifespanScore +
     riskPenalty;
-  const totalScore = clamp(uncappedTotal, 0, 100);
+  const hasGitHubReinforcement = sourceTypes.has("github_issues") && sourceTypes.size >= 2;
+  const crossSourceBonus = hasGitHubReinforcement ? Math.min(7, crossSourceScore) : 0;
+  const computedTotal = clamp(uncappedTotal + crossSourceBonus, 0, 100);
+  const totalScore = hasGitHubReinforcement
+    ? Math.max(computedTotal, Math.min(86, (candidate.totalScore ?? computedTotal) + crossSourceBonus))
+    : computedTotal;
   const verdict = computeVerdict({
     totalScore,
     sourceCount,
@@ -150,7 +165,10 @@ export function scoreCommunityHeat(
       : "";
   const rumorText = rumorSignals.length > 0 ? ` 루머성 신호 ${rumorSignals.length}개로 riskPenalty를 적용했습니다.` : "";
   const riskText = highRiskSignals.length > 0 ? ` high risk 신호 ${highRiskSignals.length}개로 write_now를 제한했습니다.` : "";
-  const scoringReason = `커뮤니티 반응 기반 조기 신호 점수입니다. 출처 ${sourceCount}개(${sourcesText}), signalType=${signalTypesText}. recency=${recencyScore}, engagement=${engagementScore}, crossSource=${crossSourceScore}, painPoint=${painPointScore}.${writeNowLimit}${rumorText}${riskText}`;
+  const githubText = hasGitHubReinforcement
+    ? ` GitHub Issues 보강 신호로 crossSourceBonus=${crossSourceBonus}를 반영했습니다.`
+    : "";
+  const scoringReason = `커뮤니티 반응 기반 조기 신호 점수입니다. 출처 ${sourceCount}개(${sourcesText}), signalType=${signalTypesText}. recency=${recencyScore}, engagement=${engagementScore}, crossSource=${crossSourceScore}, painPoint=${painPointScore}.${githubText}${writeNowLimit}${rumorText}${riskText}`;
   const recommendationReason =
     verdict === "write_now"
       ? "바로 작성 추천: 커뮤니티 2곳 이상 반복 신호와 공식/뉴스 확인이 함께 있습니다."

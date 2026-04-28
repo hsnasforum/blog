@@ -5,6 +5,8 @@ export const communitySignalTypes = [
   "beginner_confusion",
   "operational_issue",
   "bug_report",
+  "documentation_issue",
+  "breaking_change",
   "rumor",
   "product_update",
   "early_news",

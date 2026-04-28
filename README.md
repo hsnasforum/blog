@@ -174,9 +174,38 @@ reasoning 모델 설정:
 - `/topics/[id]/trends`
 - `/posts/[id]/workflow`
 
+## Community Radar 보강 소스
+DCInside Manual HTML Import로 만든 커뮤니티 조기 신호는 GitHub Issues로 보강 검색할 수 있습니다. 이 수집기는 GitHub Search Issues API의 공개 메타데이터만 사용하며 issue 본문, 댓글 전문, 이미지 원문은 저장하지 않습니다.
+
+`GITHUB_TOKEN`은 선택값입니다. 값이 있으면 서버에서만 `Authorization` 헤더로 사용해 rate limit을 완화하고, 값이 없으면 unauthenticated public API로 동작하면서 rate limit warning을 표시합니다.
+
+```env
+GITHUB_TOKEN=""
+STACK_EXCHANGE_KEY=""
+```
+
+GitHub Issues 신호는 공식 문서가 아니라 보강 신호입니다. 일반 issue는 `cross_source_matched` 또는 `needs_manual_review`로 저장되며, 사람이 공식 출처 확인을 추가하기 전에는 자동으로 `official_confirmed`로 올리지 않습니다.
+
 ## 안전한 E2E 실행 방법
 Windows Defender의 ClickFix 계열 오탐을 피하기 위해 E2E 테스트는 PowerShell here-string, `wsl -e tee`, `/tmp` JS 생성 방식으로 실행하지 않습니다.
 테스트 코드는 프로젝트 내부의 정식 파일인 `scripts/e2e/provider-success.mjs`에 보관하고, npm script로만 실행합니다.
+
+Next dev server를 띄우는 E2E는 병렬 실행하지 않는 것을 권장합니다. 여러 E2E가 동시에 `.next` 개발 빌드 산출물을 쓰면 특정 페이지 chunk나 App Router page module이 일시적으로 500을 낼 수 있습니다. 전체 검증은 순차 실행 스크립트를 사용합니다.
+
+```bash
+npm run test:e2e:all:serial
+```
+
+순차 실행 순서:
+
+1. `npm run test:community:radar`
+2. `npm run test:dcinside:preview-qa`
+3. `npm run test:e2e:official-verification`
+4. `npm run test:e2e:community-article`
+5. `npm run test:e2e:github-issues-boost`
+6. `npm run test:e2e:provider:oauth`
+
+`test:e2e:all:serial`은 각 테스트의 시작/종료 시간과 전체 소요 시간을 출력하고, 하나라도 실패하면 즉시 중단합니다. 출력 중 `Authorization`, API key, OAuth token, GitHub/Reddit token 형태의 값은 마스킹합니다.
 
 `test:e2e:provider`는 현재 셸과 `.env`의 provider 설정을 그대로 사용하는 generic 스크립트입니다. `.env`가 `WRITER_PROVIDER=api-key`이고 실제 `OPENAI_API_KEY`가 없으면 인증 실패가 정상입니다.
 
@@ -231,6 +260,13 @@ DATABASE_URL="file:./dev-e2e.db" E2E_CLEANUP_DB=1 npm run test:e2e:provider
 ```bash
 DATABASE_URL="file:./dev-e2e.db" npm run test:e2e:provider -- --cleanup-db
 ```
+
+E2E 실행 안정화 장기 TODO:
+
+1. E2E마다 고유 `E2E_PORT`를 계속 유지합니다.
+2. E2E마다 고유 `DATABASE_URL`을 계속 사용합니다.
+3. 병렬 실행이 필요해지면 Next `distDir` 격리를 검토합니다.
+4. 더 나은 방향은 공통 dev server 1개를 띄우고 여러 E2E가 같은 서버를 순차적으로 사용하는 구조입니다.
 
 ## 향후 확장 계획
 - 실제 외부 데이터 연동(검색 트렌드/뉴스/커뮤니티)으로 추정 점수 고도화

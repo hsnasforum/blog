@@ -5,9 +5,13 @@ import { useState } from "react";
 
 import {
   officialSourceTypeLabels,
+  officialSourceTypeGuidance,
   officialSourceTypes,
   officialVerificationStatusLabels,
+  officialVerificationStatusGuidance,
   officialVerificationStatuses,
+  officialWriteNowRules,
+  recommendedVerificationStatusBySourceType,
   type OfficialSourceType,
   type OfficialVerificationStatus,
 } from "@/lib/official-source/official-source-types";
@@ -40,6 +44,13 @@ export function OfficialSourceForm({
 
   async function submit(statusOverride?: OfficialVerificationStatus) {
     const status = statusOverride ?? verificationStatus;
+    const noteRequired = status === "contradicted" || status === "rejected_as_rumor";
+    if (noteRequired && !note.trim()) {
+      setMessage(null);
+      setError("반박됨 또는 루머 처리됨 상태로 저장하려면 note에 근거를 남겨주세요.");
+      return;
+    }
+
     setPendingStatus(statusOverride ?? "add");
     setMessage(null);
     setError(null);
@@ -69,15 +80,24 @@ export function OfficialSourceForm({
     }
   }
 
-  const submitDisabled = pendingStatus !== null || !title.trim() || !url.trim();
+  function handleSourceTypeChange(nextSourceType: OfficialSourceType) {
+    setSourceType(nextSourceType);
+    setVerificationStatus(recommendedVerificationStatusBySourceType[nextSourceType]);
+  }
+
+  const noteRequired = verificationStatus === "contradicted" || verificationStatus === "rejected_as_rumor";
+  const submitDisabled = pendingStatus !== null || !title.trim() || !url.trim() || (noteRequired && !note.trim());
 
   return (
     <div className="mt-2 min-w-72 rounded-md border border-slate-200 bg-slate-50 p-2 text-xs">
       <p className="font-semibold text-slate-800">공식 출처 추가</p>
+      <p className="mt-1 text-slate-600">
+        공식 문서, 공식 블로그, GitHub release, GitHub issue, X 원문, 뉴스, 기타 출처를 URL과 짧은 메모로만 저장합니다.
+      </p>
       <div className="mt-2 grid gap-1">
         <select
           value={sourceType}
-          onChange={(event) => setSourceType(event.target.value as OfficialSourceType)}
+          onChange={(event) => handleSourceTypeChange(event.target.value as OfficialSourceType)}
           className="rounded-md border border-slate-300 px-2 py-1"
         >
           {officialSourceTypes.map((type) => (
@@ -86,6 +106,9 @@ export function OfficialSourceForm({
             </option>
           ))}
         </select>
+        <p className="rounded border border-blue-100 bg-blue-50 px-2 py-1 text-blue-800">
+          {officialSourceTypeGuidance[sourceType]}
+        </p>
         {communitySignals.length > 0 ? (
           <select
             value={communitySignalId}
@@ -115,7 +138,7 @@ export function OfficialSourceForm({
         <textarea
           value={note}
           onChange={(event) => setNote(event.target.value)}
-          placeholder="짧은 확인 메모"
+          placeholder={noteRequired ? "반박/루머 판단 근거를 반드시 입력" : "짧은 확인 메모"}
           rows={2}
           className="rounded-md border border-slate-300 px-2 py-1"
         />
@@ -130,6 +153,17 @@ export function OfficialSourceForm({
             </option>
           ))}
         </select>
+        <p className="rounded border border-amber-100 bg-amber-50 px-2 py-1 text-amber-800">
+          {officialVerificationStatusGuidance[verificationStatus]}
+        </p>
+        <div className="rounded border border-slate-200 bg-white px-2 py-1 text-slate-600">
+          <p className="font-medium text-slate-700">write_now 조건</p>
+          <ul className="mt-1 space-y-0.5">
+            {officialWriteNowRules.map((rule) => (
+              <li key={rule}>{rule}</li>
+            ))}
+          </ul>
+        </div>
       </div>
       <div className="mt-2 flex flex-wrap gap-1">
         <button
