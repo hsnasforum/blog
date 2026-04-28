@@ -1,0 +1,204 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model BlogProfile {
+  id                 String   @id @default("default")
+  blogName           String
+  targetAudience     String
+  defaultTone        String
+  preferredStructure String
+  forbiddenPhrases   String
+  seoRules           String
+  htmlRules          String
+  tooltipRules       String
+  imagePromptRules   String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  topics             Topic[]
+  posts              Post[]
+}
+
+model Topic {
+  id               String           @id @default(cuid())
+  rawTopic         String
+  memo             String?
+  optionalKeywords String?
+  avoidTopics      String?
+  status           String           @default("new")
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  blogProfileId    String?
+  blogProfile      BlogProfile?     @relation(fields: [blogProfileId], references: [id], onDelete: SetNull)
+  trendCandidates  TrendCandidate[]
+  communitySignals CommunitySignal[]
+  posts            Post[]
+
+  @@index([createdAt])
+}
+
+model TrendCandidate {
+  id                   String   @id @default(cuid())
+  topicId              String
+  keyword              String
+  rationale            String
+  angleRecommendation  String?
+  titleCandidates      String?
+  scoringBasis         String?
+  searchGrowthScore    Int?
+  newsVelocityScore    Int?
+  communityHeatScore   Int?
+  blogFitScore         Int?
+  differentiationScore Int?
+  lifespanScore        Int?
+  riskPenalty          Int?
+  totalScore           Int?
+  verdict              String?
+  confidence           String?
+  scoringVersion       String?
+  scoringReason        String?
+  recommendationReason String?
+  sourceMetaJson       String?
+  isRecommended        Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  topic                Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  posts                Post[]
+  trendSignals         TrendSignal[]
+  communitySignals     CommunitySignal[]
+  officialSources      OfficialSource[]
+
+  @@index([topicId, totalScore(sort: Desc)])
+}
+
+model OfficialSource {
+  id                 String           @id @default(cuid())
+  candidateId        String
+  communitySignalId  String?
+  sourceType         String
+  title              String
+  url                String
+  note               String?
+  verificationStatus String
+  addedAt            DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  candidate          TrendCandidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  communitySignal    CommunitySignal? @relation(fields: [communitySignalId], references: [id], onDelete: SetNull)
+
+  @@index([candidateId])
+  @@index([communitySignalId])
+  @@index([verificationStatus])
+  @@index([sourceType])
+}
+
+model CommunitySignal {
+  id                 String          @id @default(cuid())
+  topicId            String?
+  candidateId        String?
+  sourceType         String
+  sourceName         String
+  sourceTab          String?
+  externalId         String?
+  canonicalUrl       String?
+  title              String
+  url                String
+  publishedAt        DateTime?
+  observedAt         DateTime?
+  collectedAt        DateTime        @default(now())
+  score              Int             @default(0)
+  viewCount          Int             @default(0)
+  commentCount       Int             @default(0)
+  reactionCount      Int             @default(0)
+  recommendCount     Int             @default(0)
+  summary            String
+  signalType         String
+  riskLevel          String          @default("medium")
+  verificationStatus String          @default("community_only")
+  confidence         String          @default("low")
+  rawMetaJson        String?
+  linksJson          String?
+  importMethod       String?
+  importBatchId      String?
+  status             String          @default("success")
+  errorMessage       String?
+  topic              Topic?          @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  candidate          TrendCandidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  officialSources    OfficialSource[]
+
+  @@index([topicId])
+  @@index([candidateId, sourceType])
+  @@index([sourceType, sourceTab])
+  @@index([signalType])
+  @@index([riskLevel])
+  @@index([verificationStatus])
+  @@index([collectedAt])
+}
+
+model TrendSignal {
+  id           String         @id @default(cuid())
+  candidateId  String
+  source       String
+  keyword      String
+  score        Int
+  rawSummary   String
+  linksJson    String?
+  status       String         @default("success")
+  errorMessage String?
+  collectedAt  DateTime       @default(now())
+  candidate    TrendCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId, source])
+  @@index([collectedAt])
+}
+
+model Post {
+  id            String          @id @default(cuid())
+  topicId       String
+  candidateId   String?
+  blogProfileId String?
+  title         String
+  angle         String?
+  outline       String?
+  draft         String?
+  reviewReport  String?
+  seoPackage    String?
+  workflowStep  String          @default("outline")
+  approvedAt    DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  topic         Topic           @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  candidate     TrendCandidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  blogProfile   BlogProfile?    @relation(fields: [blogProfileId], references: [id], onDelete: SetNull)
+
+  @@index([topicId, createdAt])
+}
+
+model ProviderConfig {
+  id        String   @id @default("default")
+  provider  String
+  mode      String
+  baseUrl   String
+  model     String
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+model GenerationLog {
+  id               String   @id @default(cuid())
+  action           String
+  provider         String
+  model            String
+  inputSummary     String
+  outputSummary    String?
+  status           String
+  generationStatus String   @default("success")
+  errorMessage     String?
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+}

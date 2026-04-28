@@ -1,26 +1,41 @@
 {
-  "name": "blog14",
+  "name": "local-blog-writer-mvp",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
+    "test:e2e:provider": "node scripts/e2e/provider-success.mjs",
+    "test:e2e:provider:oauth": "DATABASE_URL=file:./dev-e2e.db E2E_CLEANUP_DB=1 WRITER_PROVIDER=oauth-proxy OPENAI_BASE_URL=http://127.0.0.1:10531/v1 OPENAI_API_KEY=dummy-for-local-proxy WRITER_MODEL=gpt-5.5 WRITER_REASONING_EFFORT=xhigh node scripts/e2e/provider-success.mjs",
+    "test:e2e:community-article": "node scripts/e2e/community-article-quality.mjs",
+    "test:e2e:official-verification": "node scripts/e2e/official-verification.mjs",
+    "test:e2e:kospi-opinion": "node scripts/e2e/kospi-user-opinion-regression.mjs",
+    "test:trend:collector": "node scripts/e2e/trend-collector-smoke.mjs",
+    "test:community:radar": "node scripts/e2e/community-radar-smoke.mjs",
+    "test:dcinside:preview-qa": "node scripts/e2e/dcinside-preview-qa.mjs"
   },
   "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "next": "14.2.5",
+    "openai": "^6.34.0",
     "react": "^18",
     "react-dom": "^18",
-    "next": "14.2.5"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "typescript": "^5",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "postcss": "^8",
-    "tailwindcss": "^3.4.1",
     "eslint": "^8",
-    "eslint-config-next": "14.2.5"
+    "eslint-config-next": "14.2.5",
+    "postcss": "^8",
+    "prisma": "^5.22.0",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
   }
 }

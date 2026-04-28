@@ -1,113 +1,211 @@
-import Image from "next/image";
+import Link from "next/link";
 
-export default function Home() {
+import { ensureBlogProfile } from "@/lib/blog-profile";
+import { prisma } from "@/lib/prisma";
+import { ensureProviderConfig } from "@/lib/writer/provider-settings";
+
+export const dynamic = "force-dynamic";
+
+function scoreColor(totalScore: number | null) {
+  if (totalScore === null) return "text-slate-500";
+  if (totalScore >= 80) return "text-emerald-700";
+  if (totalScore >= 65) return "text-blue-700";
+  if (totalScore >= 50) return "text-amber-700";
+  return "text-rose-700";
+}
+
+function scoreBasisLabel(scoringBasis: string | null) {
+  if (scoringBasis === "external_data") return "외부 데이터";
+  if (scoringBasis === "estimated_without_external_data") return "추정 점수";
+  return "미계산";
+}
+
+export default async function Home() {
+  const profile = await ensureBlogProfile();
+  const providerConfigPromise = ensureProviderConfig();
+  const [topics, topCandidates, posts, logs, providerConfig] = await Promise.all([
+    prisma.topic.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 12,
+      include: {
+        _count: { select: { trendCandidates: true, posts: true } },
+      },
+    }),
+    prisma.trendCandidate.findMany({
+      orderBy: [{ totalScore: "desc" }, { createdAt: "desc" }],
+      take: 12,
+      include: { topic: true },
+    }),
+    prisma.post.findMany({
+      orderBy: { updatedAt: "desc" },
+      take: 12,
+      include: { topic: true },
+    }),
+    prisma.generationLog.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 8,
+    }),
+    providerConfigPromise,
+  ]);
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.tsx</code>
+    <div className="space-y-6">
+      <section className="rounded-md border border-slate-200 bg-white p-5">
+        <h1 className="text-lg font-semibold text-slate-900">대시보드</h1>
+        <p className="mt-1 text-sm text-slate-600">
+          토픽 입력 → Trend Scout → 기획안/초안/검수 → 승인 단계까지 상태를 한 화면에서 확인합니다.
         </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:size-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <div className="rounded-md border border-slate-200 px-3 py-2">
+            <p className="text-xs text-slate-500">BlogProfile</p>
+            <p className="text-sm font-medium text-slate-900">{profile.blogName}</p>
+          </div>
+          <div className="rounded-md border border-slate-200 px-3 py-2">
+            <p className="text-xs text-slate-500">Provider</p>
+            <p className="text-sm font-medium text-slate-900">
+              {providerConfig?.provider ?? "미동기화"} ({providerConfig?.mode ?? "n/a"})
+            </p>
+          </div>
+          <div className="rounded-md border border-slate-200 px-3 py-2">
+            <p className="text-xs text-slate-500">Model</p>
+            <p className="text-sm font-medium text-slate-900">{providerConfig?.model ?? "n/a"}</p>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div className="relative z-[-1] flex place-items-center before:absolute before:h-[300px] before:w-full before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 sm:before:w-[480px] sm:after:w-[240px] before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
+      <section className="rounded-md border border-slate-200 bg-white p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-slate-900">Topic 상태</h2>
+          <Link
+            href="/topics/new"
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            새 토픽 입력
+          </Link>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="text-slate-500">
+              <tr>
+                <th className="px-2 py-2">rawTopic</th>
+                <th className="px-2 py-2">status</th>
+                <th className="px-2 py-2">candidates</th>
+                <th className="px-2 py-2">posts</th>
+                <th className="px-2 py-2">actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topics.map((topic) => (
+                <tr key={topic.id} className="border-t border-slate-100">
+                  <td className="px-2 py-2 font-medium text-slate-900">{topic.rawTopic}</td>
+                  <td className="px-2 py-2 text-slate-700">{topic.status}</td>
+                  <td className="px-2 py-2 text-slate-700">{topic._count.trendCandidates}</td>
+                  <td className="px-2 py-2 text-slate-700">{topic._count.posts}</td>
+                  <td className="px-2 py-2">
+                    <Link
+                      href={`/topics/${topic.id}/trends`}
+                      className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                    >
+                      Trend Scout
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
-      <div className="mb-32 grid text-center lg:mb-0 lg:w-full lg:max-w-5xl lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
+      <section className="rounded-md border border-slate-200 bg-white p-5">
+        <h2 className="mb-3 text-base font-semibold text-slate-900">
+          TrendCandidate 상위 점수 (점수순)
+        </h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="text-slate-500">
+              <tr>
+                <th className="px-2 py-2">keyword</th>
+                <th className="px-2 py-2">topic</th>
+                <th className="px-2 py-2">totalScore</th>
+                <th className="px-2 py-2">verdict</th>
+                <th className="px-2 py-2">basis</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topCandidates.map((candidate) => (
+                <tr key={candidate.id} className="border-t border-slate-100">
+                  <td className="px-2 py-2 font-medium text-slate-900">{candidate.keyword}</td>
+                  <td className="px-2 py-2 text-slate-700">{candidate.topic.rawTopic}</td>
+                  <td className={`px-2 py-2 font-semibold ${scoreColor(candidate.totalScore)}`}>
+                    {candidate.totalScore ?? "-"}
+                  </td>
+                  <td className="px-2 py-2 text-slate-700">{candidate.verdict ?? "-"}</td>
+                  <td className="px-2 py-2 text-xs text-slate-500">
+                    {scoreBasisLabel(candidate.scoringBasis)}
+                    {candidate.confidence ? <span> · {candidate.confidence}</span> : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
+      <section className="rounded-md border border-slate-200 bg-white p-5">
+        <h2 className="mb-3 text-base font-semibold text-slate-900">Post 워크플로우</h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="text-slate-500">
+              <tr>
+                <th className="px-2 py-2">title</th>
+                <th className="px-2 py-2">topic</th>
+                <th className="px-2 py-2">step</th>
+                <th className="px-2 py-2">updatedAt</th>
+                <th className="px-2 py-2">actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {posts.map((post) => (
+                <tr key={post.id} className="border-t border-slate-100">
+                  <td className="px-2 py-2 font-medium text-slate-900">{post.title}</td>
+                  <td className="px-2 py-2 text-slate-700">{post.topic.rawTopic}</td>
+                  <td className="px-2 py-2 text-slate-700">{post.workflowStep}</td>
+                  <td className="px-2 py-2 text-slate-700">
+                    {post.updatedAt.toLocaleString("ko-KR", { hour12: false })}
+                  </td>
+                  <td className="px-2 py-2">
+                    <Link
+                      href={`/posts/${post.id}/workflow`}
+                      className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                    >
+                      워크플로우 열기
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-balance text-sm opacity-50">
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
+      <section className="rounded-md border border-slate-200 bg-white p-5">
+        <h2 className="mb-3 text-base font-semibold text-slate-900">GenerationLog 최근 기록</h2>
+        <ul className="space-y-2 text-sm">
+          {logs.map((log) => (
+            <li key={log.id} className="rounded-md border border-slate-200 px-3 py-2">
+              <p className="font-medium text-slate-900">
+                {log.action} / {log.status}
+              </p>
+              <p className="text-xs text-slate-600">
+                {log.provider} · {log.model} · {log.createdAt.toLocaleString("ko-KR", { hour12: false })}
+              </p>
+              <p className="mt-1 text-xs text-slate-600">input: {log.inputSummary}</p>
+              {log.outputSummary ? <p className="text-xs text-slate-600">output: {log.outputSummary}</p> : null}
+              {log.errorMessage ? <p className="text-xs text-rose-600">error: {log.errorMessage}</p> : null}
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
   );
 }
