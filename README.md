@@ -174,6 +174,15 @@ reasoning 모델 설정:
 - `/topics/[id]/trends`
 - `/posts/[id]/workflow`
 
+## REFUSE HUB BlogProfile 프리셋
+`/settings/blog-profile` 화면에는 `REFUSE HUB 프리셋 적용` 버튼이 있습니다.
+
+- 버튼은 화면 입력값만 채우며, DB 값은 `설정 저장`을 눌렀을 때만 바뀝니다.
+- 기존 DB의 BlogProfile 값은 앱 시작이나 페이지 진입만으로 조용히 덮어쓰지 않습니다.
+- 프리셋은 보고서/검수 문서/내부 구현 문서 톤을 줄이고, 실제 블로그 글처럼 결론, 판단 기준, 사용 장면, 개인적인 운영 기준을 먼저 드러내도록 구성되어 있습니다.
+- 일반 글에서는 `WriterService`, `GenerationLog`, `approval guard`, `API route`, `oauth-proxy` 같은 내부 구현 용어를 피하고, REFUSE HUB 개발기처럼 구현 자체가 주제일 때만 사용합니다.
+- 비교 글 태그는 `Claude Code`, `Claude Opus`, `Claude Sonnet`, `Opus Sonnet 차이`, `Claude Code 모델 선택`처럼 실제 검색자가 입력할 표현을 우선합니다.
+
 ## Community Radar 보강 소스
 DCInside Manual HTML Import로 만든 커뮤니티 조기 신호는 GitHub Issues로 보강 검색할 수 있습니다. 이 수집기는 GitHub Search Issues API의 공개 메타데이터만 사용하며 issue 본문, 댓글 전문, 이미지 원문은 저장하지 않습니다.
 

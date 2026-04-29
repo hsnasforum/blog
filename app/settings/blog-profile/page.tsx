@@ -1,12 +1,25 @@
 import { revalidatePath } from "next/cache";
 
+import { BlogProfileForm } from "@/components/blog-profile-form";
 import { defaultBlogProfileInput, ensureBlogProfile } from "@/lib/blog-profile";
+import { refuseHubBlogProfilePreset, type BlogProfileInput } from "@/lib/blog-profile-presets";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export default async function BlogProfilePage() {
   const profile = await ensureBlogProfile();
+  const profileInput: BlogProfileInput = {
+    blogName: profile.blogName,
+    targetAudience: profile.targetAudience,
+    defaultTone: profile.defaultTone,
+    preferredStructure: profile.preferredStructure,
+    forbiddenPhrases: profile.forbiddenPhrases,
+    seoRules: profile.seoRules,
+    htmlRules: profile.htmlRules,
+    tooltipRules: profile.tooltipRules,
+    imagePromptRules: profile.imagePromptRules,
+  };
 
   async function saveBlogProfile(formData: FormData) {
     "use server";
@@ -63,122 +76,11 @@ export default async function BlogProfilePage() {
         </p>
       </header>
 
-      <form action={saveBlogProfile} className="space-y-4 rounded-md border border-slate-200 bg-white p-5">
-        <div className="space-y-1">
-          <label className="text-sm font-medium text-slate-800" htmlFor="blogName">
-            blogName
-          </label>
-          <input
-            id="blogName"
-            name="blogName"
-            defaultValue={profile.blogName}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-sm font-medium text-slate-800" htmlFor="targetAudience">
-            targetAudience
-          </label>
-          <textarea
-            id="targetAudience"
-            name="targetAudience"
-            defaultValue={profile.targetAudience}
-            className="min-h-20 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-sm font-medium text-slate-800" htmlFor="defaultTone">
-            defaultTone
-          </label>
-          <input
-            id="defaultTone"
-            name="defaultTone"
-            defaultValue={profile.defaultTone}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-sm font-medium text-slate-800" htmlFor="preferredStructure">
-            preferredStructure
-          </label>
-          <textarea
-            id="preferredStructure"
-            name="preferredStructure"
-            defaultValue={profile.preferredStructure}
-            className="min-h-20 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-sm font-medium text-slate-800" htmlFor="forbiddenPhrases">
-            forbiddenPhrases
-          </label>
-          <textarea
-            id="forbiddenPhrases"
-            name="forbiddenPhrases"
-            defaultValue={profile.forbiddenPhrases}
-            className="min-h-20 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-sm font-medium text-slate-800" htmlFor="seoRules">
-            seoRules
-          </label>
-          <textarea
-            id="seoRules"
-            name="seoRules"
-            defaultValue={profile.seoRules}
-            className="min-h-20 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-sm font-medium text-slate-800" htmlFor="htmlRules">
-            htmlRules
-          </label>
-          <textarea
-            id="htmlRules"
-            name="htmlRules"
-            defaultValue={profile.htmlRules}
-            className="min-h-20 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-sm font-medium text-slate-800" htmlFor="tooltipRules">
-            tooltipRules
-          </label>
-          <textarea
-            id="tooltipRules"
-            name="tooltipRules"
-            defaultValue={profile.tooltipRules}
-            className="min-h-20 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-sm font-medium text-slate-800" htmlFor="imagePromptRules">
-            imagePromptRules
-          </label>
-          <textarea
-            id="imagePromptRules"
-            name="imagePromptRules"
-            defaultValue={profile.imagePromptRules}
-            className="min-h-20 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-        </div>
-
-        <button
-          type="submit"
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-        >
-          설정 저장
-        </button>
-      </form>
+      <BlogProfileForm
+        profile={profileInput}
+        preset={refuseHubBlogProfilePreset}
+        action={saveBlogProfile}
+      />
     </section>
   );
 }

@@ -366,33 +366,46 @@ function extractPublishDecision(reviewReport) {
   return (match?.[1] ?? reviewReport.slice(0, 600)).trim();
 }
 
+const refuseHubProfileFixture = {
+  blogName: "REFUSE HUB",
+  targetAudience:
+    "REFUSE HUB의 주요 독자는 AI 개발 도구, 바이브코딩, Claude Code, Codex, ChatGPT, Gemini CLI, 자동화 도구를 직접 써보며 시행착오를 겪는 초보~중급 개발자, 1인 창작자, 블로그 운영자다. 출처 없는 경험담은 지어내지 않는다.",
+  defaultTone:
+    "명확하고 실무적인 존댓말을 사용한다. 보고서처럼 딱딱하게 쓰지 말고 실제 사용자가 자기 블로그에 정리하는 느낌으로 쓴다. 제 기준은 이렇습니다, 저라면 이렇게 봅니다처럼 개인적인 판단을 자연스럽게 포함한다. 영어식 if/then 문장, 개발 계획서식 조건문, 내부 구현 문서 같은 톤은 사용하지 않는다.",
+  preferredStructure:
+    "글은 검색자가 궁금해하는 답부터 시작한다. 비교 글은 결론, 핵심 차이, 작업 유형별 추천 기준, 비용/속도/실패 비용/검증 가능성 비교, 실제 워크플로우 예시, 체크리스트, 개인적인 운영 기준으로 마무리한다. 커뮤니티 떡밥/루머 글은 커뮤니티 신호, 보강 신호, 공식 확인 여부, 현실적인 확인 방법, 개인 판단으로 마무리한다.",
+  forbiddenPhrases:
+    "무조건, 100% 보장, 클릭만 하면, 완전 자동화, 생산성이 폭발한다, 운영이 완전히 자동화된다, 현재 입력 기준으로 공식 확인된 자료는 없습니다, 공식 자료를 근거로 단정할 수는 없습니다, 모두 확인 필요로 두는 것이 안전합니다, 확인 필요 항목입니다, if ... then ..., WriterService, GenerationLog, approval guard, provider success E2E, API route, DB model, oauth-proxy, OpenAI-compatible provider, Tistory Export, TrendCandidate, sourceMetaJson, needs_manual_review, official_confirmed",
+  seoRules:
+    "핵심 키워드 1개를 제목 앞부분에 자연스럽게 포함한다. 태그는 8~10개를 권장한다. 비교 글 태그 예: Claude Code, Claude Opus, Claude Sonnet, Opus Sonnet 차이, Claude Code 모델 선택, AI 코딩 도구, 코딩 에이전트, 모델 선택 기준, Anthropic. 피할 태그: WriterService, GenerationLog, approval guard, oauth-proxy, API Route, provider success E2E, Tistory Export, 내부 테스트명, 너무 넓은 AI/자동화/SEO 단독 태그.",
+  htmlRules:
+    "REFUSE HUB의 티스토리 HTML 편집기에 바로 붙여넣을 수 있는 본문 HTML을 우선한다. 본문 HTML에는 제목, 메타 설명, 태그, 검수 리포트를 섞지 않는다. script, iframe, onerror, javascript: URL, inline event handler를 넣지 않는다.",
+  tooltipRules:
+    "낯선 약어, 개발 용어, AI 도구명, 인증 방식, API 용어는 첫 등장 시 짧은 설명을 붙인다. 내부 구현 용어는 일반 글에서는 되도록 쓰지 않는다.",
+  imagePromptRules:
+    "REFUSE HUB의 이미지는 실제 작업 맥락을 반영한 스크린샷형 또는 다이어그램형 이미지를 우선한다. 과장된 미래형 AI 이미지, 네온 회로, 홀로그램, 의미 없는 로봇 이미지는 피한다.",
+};
+
 async function seed(prisma) {
   const profile = await prisma.blogProfile.upsert({
     where: { id: "default" },
-    update: {
-      blogName: "REFUSE HUB",
-      targetAudience: "AI 개발 도구를 실제 블로그 운영에 적용하려는 개인 개발자",
-      defaultTone: "과장하지 않고, 확인 필요와 조건 분기를 분명히 쓰는 현실적인 톤",
-      preferredStructure: "문제 상황, 커뮤니티 신호, 공식 확인 포인트, 선택 기준, 발행 전 검수",
-      forbiddenPhrases: "무조건, 완벽, 끝판왕, 충격, 확정이라고 단정",
-      seoRules: "검색자가 실제로 칠 표현을 우선하고, 커뮤니티 신호는 공식 확인 전 검토형으로 쓴다.",
-      htmlRules: "h2/h3 중심, 과도한 inline style 금지",
-      tooltipRules: "내부 용어는 일반 독자용 표현으로 먼저 풀어쓴다.",
-      imagePromptRules: "과장 없는 실무형 이미지",
-    },
+    update: refuseHubProfileFixture,
     create: {
       id: "default",
-      blogName: "REFUSE HUB",
-      targetAudience: "AI 개발 도구를 실제 블로그 운영에 적용하려는 개인 개발자",
-      defaultTone: "과장하지 않고, 확인 필요와 조건 분기를 분명히 쓰는 현실적인 톤",
-      preferredStructure: "문제 상황, 커뮤니티 신호, 공식 확인 포인트, 선택 기준, 발행 전 검수",
-      forbiddenPhrases: "무조건, 완벽, 끝판왕, 충격, 확정이라고 단정",
-      seoRules: "검색자가 실제로 칠 표현을 우선하고, 커뮤니티 신호는 공식 확인 전 검토형으로 쓴다.",
-      htmlRules: "h2/h3 중심, 과도한 inline style 금지",
-      tooltipRules: "내부 용어는 일반 독자용 표현으로 먼저 풀어쓴다.",
-      imagePromptRules: "과장 없는 실무형 이미지",
+      ...refuseHubProfileFixture,
     },
   });
+  assertStep(profile.blogName === "REFUSE HUB", "BlogProfile preset blogName should be REFUSE HUB", profile);
+  assertStep(
+    profile.forbiddenPhrases.includes("if ... then ...") && profile.forbiddenPhrases.includes("WriterService"),
+    "BlogProfile forbiddenPhrases should include if/then and internal implementation terms",
+    { forbiddenPhrases: profile.forbiddenPhrases },
+  );
+  assertStep(
+    /Claude Code/.test(profile.seoRules) && /Claude Opus/.test(profile.seoRules) && /Claude Sonnet/.test(profile.seoRules),
+    "BlogProfile seoRules should include Claude Code/Opus/Sonnet tag examples",
+    { seoRules: profile.seoRules },
+  );
   const topic = await prisma.topic.create({
     data: {
       rawTopic: "Claude Code Opus Sonnet 차이: Opus 중단설 전에 확인할 작업 기준",
@@ -676,7 +689,7 @@ async function runE2E() {
     draftTail: draft.slice(-1800),
   });
   assertStep(
-    /공식\s*출처\s*확인\s*필요|공식\s*확인\s*필요|공식\s*출처|공식\s*확인/.test(reviewReport),
+    /공식\s*출처\s*확인\s*필요|공식\s*확인\s*필요|공식\s*출처|공식\s*확인|공식\s*공지\s*여부|출처\s*성격|출처\s*처리\s*보강|GitHub\s*Issues는\s*공식\s*발표가\s*아니라/i.test(reviewReport),
     "reviewReport does not separate official-source checks",
     { reviewPreview: reviewReport.slice(0, 1200) },
   );
