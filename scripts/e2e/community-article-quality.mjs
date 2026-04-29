@@ -57,6 +57,11 @@ const draftCautionPatterns = [
   /단정하기\s*어렵/,
   /검토/,
   /출처\s*확인/,
+  /말하기\s*이릅니다/,
+  /확인해야\s*할\s*신호/,
+  /공식\s*안내/,
+  /공식\s*문서/,
+  /중단\s*확정보다는/,
 ];
 const draftInternalTermPattern =
   /WriterService|GenerationLog|approval\s*guard|provider\s*success\s*E2E|API\s*route|\/api\/|DB\s*model|oauth-proxy|OpenAI-compatible\s*provider|fallback\s*provider|scoring\s*v2|TrendCandidate|sourceMetaJson|verificationStatus|needs_manual_review|official_confirmed|approved\s*=\s*false|publish\s*API|Tistory\s*Export|자동\s*발행\s*구조/i;
@@ -74,6 +79,18 @@ const firstSectionConclusionPattern =
   /^#{1,2}\s*결론|^##\s*결론|Sonnet은\s*기본\s*작업[\s\S]{0,400}Opus는\s*실패\s*비용/i;
 const bodyHtmlMixedMetadataPattern = /메타\s*설명\s*:|태그\s*:|추천\s*태그|SEO\s*title|metaDescription|reviewReport|검수\s*리포트/i;
 const escapedTistoryTagPattern = /&lt;(p|h2|h3)\s+data-ke-size/i;
+const defensiveAuditPhrasePattern =
+  /현재\s*이\s*글에서\s*공식\s*자료를\s*근거로|단정할\s*수는\s*없습니다|모두\s*확인\s*필요로\s*두는\s*것이\s*안전합니다|현재\s*입력\s*기준|공식\s*확인된\s*자료는\s*없습니다/i;
+const naturalSafetyPhrasePattern =
+  /아직(?:은)?[\s\S]{0,40}말하기\s*이릅니다|저는[\s\S]{0,80}보는\s*편이\s*맞다고\s*봅니다|중단\s*확정보다는\s*확인해야\s*할\s*신호|작업별\s*의존도|결론을\s*서두르지\s*않는\s*편이\s*낫다고\s*봅니다|내\s*계정과\s*작업\s*환경/i;
+const densityPatternSet = [
+  /실패\s*비용/i,
+  /작업별|작업\s*기준/i,
+  /Opus[\s\S]{0,80}Sonnet|Sonnet[\s\S]{0,80}Opus/i,
+  /모델\s*선택|선택\s*화면|설정\s*항목/i,
+  /비용|속도|검증\s*가능성/i,
+  /체크리스트|직접\s*확인|내\s*환경/i,
+];
 const communityRumorWatchFailureFixtures = [
   "DB model에 `GenerationLog` 필드를 추가하는 초안 작성",
   "/api/internal/generations route에서 provider 호출 흐름 설명",
@@ -551,6 +568,21 @@ async function runE2E() {
     title,
     draftPreview: draft.slice(0, 1200),
   });
+  assertStep(!defensiveAuditPhrasePattern.test(draft), "draft contains defensive audit phrases", {
+    draftPreview: draft.slice(0, 1800),
+  });
+  assertStep(naturalSafetyPhrasePattern.test(draft), "draft lacks natural personal-judgment safety phrasing", {
+    draftPreview: draft.slice(0, 1800),
+    draftTail: draft.slice(-1800),
+  });
+  assertStep(
+    densityPatternSet.filter((pattern) => pattern.test(draft)).length >= 5,
+    "draft lacks model-comparison substance density",
+    {
+      matched: densityPatternSet.filter((pattern) => pattern.test(draft)).map((pattern) => pattern.source),
+      draftPreview: draft.slice(0, 1800),
+    },
+  );
   assertStep(
     /GitHub|깃허브|이슈/.test(draft) && !hasGitHubOfficialOverclaim(draft),
     "draft should mention GitHub issue reinforcement without treating it as official confirmation",

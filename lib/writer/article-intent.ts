@@ -76,11 +76,20 @@ export const modelComparisonRumorTags = [
   "Claude Sonnet",
   "Opus Sonnet 차이",
   "Claude Code 모델 선택",
+  "Claude Code Opus",
   "Opus 중단설",
   "AI 코딩 도구",
-  "코딩 에이전트",
   "모델 선택 기준",
   "Anthropic",
+];
+
+const defensiveAuditPhrasePatterns = [
+  { label: "defensive official-source preface", pattern: /현재\s*이\s*글에서\s*공식\s*자료를\s*근거로/i },
+  { label: "cannot assert audit phrase", pattern: /단정할\s*수는\s*없습니다/i },
+  { label: "all 확인 필요 audit phrase", pattern: /모두\s*확인\s*필요로\s*두는\s*것이\s*안전합니다/i },
+  { label: "current input 기준 phrase", pattern: /현재\s*입력\s*기준/i },
+  { label: "no official source audit phrase", pattern: /공식\s*확인된\s*자료는\s*없습니다/i },
+  { label: "검수형 확인 필요 항목 phrase", pattern: /공식\s*확인\s*전까지는\s*확인\s*필요\s*항목입니다/i },
 ];
 
 function compactText(parts: Array<string | null | undefined>) {
@@ -152,6 +161,12 @@ export function findPublicArticleDraftViolations(draft: string, intent: ArticleI
 
   if (ifThenPatterns.some((pattern) => pattern.test(draft))) {
     violations.push("if/then");
+  }
+
+  if (intent.primaryIntent === "model_comparison_guide" && hasRumorSafetyOverlay(intent)) {
+    violations.push(
+      ...defensiveAuditPhrasePatterns.filter(({ pattern }) => pattern.test(draft)).map(({ label }) => label),
+    );
   }
 
   return violations;
