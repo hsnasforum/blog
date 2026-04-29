@@ -24,6 +24,7 @@ export type WriterReinforcementSignalContext = {
 
 export type WriterSourceContext = {
   communitySignal: {
+    sourceType: string;
     signalTitle: string;
     signalUrl: string;
     signalType: string;
@@ -110,6 +111,7 @@ export function buildWriterSourceContext(candidate: {
   return {
     communitySignal: sourceMeta
       ? {
+          sourceType: sourceMeta.sourceType,
           signalTitle: sourceMeta.signalTitle,
           signalUrl: sourceMeta.signalUrl,
           signalType: sourceMeta.signalType,

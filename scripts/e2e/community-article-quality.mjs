@@ -47,6 +47,9 @@ const dangerousMarkupPattern = /rawHtml|originalHtml|<tr|<script|<iframe|onerror
 const titleBadPattern =
   /클로드\s*프로,\s*클코\s*오푸스\s*제공\s*중단\s*확정|오푸스\s*제공\s*중단\s*확정|Claude\s*Code\s*Opus\s*중단\s*확정/i;
 const titleReviewPattern = /중단설|공식\s*확인\s*전|체크할\s*것|확인해야\s*할\s*점|검토/i;
+const titleModelComparisonPattern = /Claude\s*Code/i;
+const titleOpusSonnetPattern = /Opus[\s\S]{0,40}Sonnet|Sonnet[\s\S]{0,40}Opus|오푸스[\s\S]{0,40}소넷|소넷[\s\S]{0,40}오푸스/i;
+const titleDriftPattern = /대체\s*도구|도구\s*비교|블로그\s*자동화|자동\s*작성/i;
 const draftCautionPatterns = [
   /커뮤니티\s*조기\s*신호/,
   /공식\s*확인/,
@@ -55,10 +58,29 @@ const draftCautionPatterns = [
   /검토/,
   /출처\s*확인/,
 ];
-const internalTagPattern = /provider\s*success\s*e2e|generationlog/i;
+const draftInternalTermPattern =
+  /WriterService|GenerationLog|approval\s*guard|provider\s*success\s*E2E|API\s*route|\/api\/|DB\s*model|oauth-proxy|OpenAI-compatible\s*provider|fallback\s*provider|scoring\s*v2|TrendCandidate|sourceMetaJson|verificationStatus|needs_manual_review|official_confirmed|approved\s*=\s*false|publish\s*API|Tistory\s*Export|자동\s*발행\s*구조/i;
+const internalTagPattern =
+  /provider\s*success\s*e2e|generationlog|writerservice|approval\s*guard|oauth-proxy|openai-compatible\s*provider|next\.?js\s*api\s*route|tistory\s*export|api\s*route|trendcandidate|sourcemetajson|needs_manual_review|자동화|seo/i;
 const sourceTagPattern = /dcinside|디씨|특이점갤/i;
 const searchIntentTagPattern =
   /Claude\s*Code|Claude\s*Pro|Opus|오푸스|AI\s*코딩\s*도구|모델\s*제공\s*중단|개발자\s*요금제|AI\s*도구\s*검토|클로드|클코/i;
+const requiredCommunityTagPatterns = [/Claude\s*Code|클코/i, /Opus|오푸스/i, /Sonnet|소넷/i, /차이|선택\s*기준|모델\s*선택/i];
+const personalJudgmentPattern =
+  /개인적으로|개인적인\s*판단|내가\s*보기엔|내\s*판단|제\s*판단|현실적인\s*대응|바로\s*갈아타기보다|대응\s*방향|마무리/i;
+const modelComparisonConclusionPattern =
+  /Sonnet은\s*기본\s*작업|Sonnet.*기본.*작업|Opus는\s*실패\s*비용|Opus.*실패\s*비용/i;
+const firstSectionConclusionPattern =
+  /^#{1,2}\s*결론|^##\s*결론|Sonnet은\s*기본\s*작업[\s\S]{0,400}Opus는\s*실패\s*비용/i;
+const bodyHtmlMixedMetadataPattern = /메타\s*설명\s*:|태그\s*:|추천\s*태그|SEO\s*title|metaDescription|reviewReport|검수\s*리포트/i;
+const escapedTistoryTagPattern = /&lt;(p|h2|h3)\s+data-ke-size/i;
+const communityRumorWatchFailureFixtures = [
+  "DB model에 `GenerationLog` 필드를 추가하는 초안 작성",
+  "/api/internal/generations route에서 provider 호출 흐름 설명",
+  "루머성 글감에 `needs_manual_review` 상태를 붙이는 리뷰 조건 작성",
+  "if 공식 확인이 나온다, then 공식 사실과 마이그레이션 가이드를 분리해 업데이트한다",
+  "if 루머로 반박된다, then 제공 중단 글이 아니라 루머 검증 실패 사례로 전환한다",
+];
 
 let devServer = null;
 let stoppingDevServer = false;
@@ -253,6 +275,10 @@ function splitSentences(text) {
     .filter(Boolean);
 }
 
+function hasPlainIfThen(text) {
+  return /\bif\b[\s\S]{0,160}\bthen\b|^\s*if\s+|\bthen\s+|\bif\b[\s\S]{0,160};\s*if\b/im.test(text);
+}
+
 function hasBadAssertion(draft) {
   const badPatterns = [
     /제공\s*중단이\s*확정됐다/,
@@ -264,6 +290,17 @@ function hasBadAssertion(draft) {
   return splitSentences(draft).some((sentence) => {
     if (!badPatterns.some((pattern) => pattern.test(sentence))) return false;
     return !exceptionPattern.test(sentence);
+  });
+}
+
+function hasGitHubOfficialOverclaim(draft) {
+  const positivePattern = /공식\s*확인됨|공식적으로\s*확인(?:됐|되었)|확정됐다|확정되었다|공식\s*발표다|공식\s*공지다/i;
+  const negationPattern = /아니다|아니며|어렵|보기\s*어려움|보기는\s*어렵|볼\s*수는\s*없|보긴\s*어렵|공식\s*공지(?:가|는)?\s*아님|보강\s*신호|뿐/i;
+
+  return splitSentences(draft).some((sentence) => {
+    if (!/GitHub|깃허브|이슈/i.test(sentence)) return false;
+    if (!positivePattern.test(sentence)) return false;
+    return !negationPattern.test(sentence);
   });
 }
 
@@ -301,10 +338,10 @@ async function seed(prisma) {
   });
   const topic = await prisma.topic.create({
     data: {
-      rawTopic: "Claude Code Opus 제공 중단 커뮤니티 신호",
+      rawTopic: "Claude Code Opus Sonnet 차이: Opus 중단설 전에 확인할 작업 기준",
       memo:
-        "DCInside 특이점갤에서 Claude Pro와 Claude Code의 Opus 제공 중단 예정 이야기가 올라왔지만 공식 확인 전이므로 검토형 글감으로 다룬다.",
-      optionalKeywords: "Claude Code, Claude Pro, Opus, AI 코딩 도구, 모델 제공 중단",
+        "Opus 중단설에 흔들리기 전에 Claude Code에서 Opus와 Sonnet을 어떤 작업 기준으로 나눠 써야 하는지 정리한다. 공식 확인 전에는 중단을 단정하지 않는다. 글의 핵심은 내부 자동화 구조가 아니라 Opus/Sonnet 선택 기준이다.",
+      optionalKeywords: "Claude Code, Claude Opus, Claude Sonnet, Opus Sonnet 차이, Claude Code 모델 선택",
       avoidTopics: "확정되지 않은 루머 단정, 단순 커뮤니티 글 요약, 출처 없는 사용자 의견",
       blogProfileId: profile.id,
     },
@@ -483,20 +520,45 @@ async function runE2E() {
   logStep("결과 문자열 품질을 검사합니다.");
   assertStep(!titleBadPattern.test(title), "title contains a forbidden certainty expression", { title });
   assertStep(titleReviewPattern.test(title), "title should use review-style wording", { title });
+  assertStep(titleModelComparisonPattern.test(title) && titleOpusSonnetPattern.test(title), "title should reflect Claude Code Opus/Sonnet comparison", {
+    title,
+  });
+  assertStep(!titleDriftPattern.test(title), "title drifted into replacement tools or blog automation", { title });
+  assertStep(
+    firstSectionConclusionPattern.test(draft.slice(0, 1000)) && modelComparisonConclusionPattern.test(draft),
+    "draft should lead with Sonnet default / Opus high failure-cost conclusion",
+    { draftPreview: draft.slice(0, 1200) },
+  );
   assertStep(cautionCount >= 2, "draft lacks community-signal caution language", {
     cautionCount,
     matched: draftCautionPatterns.filter((pattern) => pattern.test(draft)).map((pattern) => pattern.source),
+  });
+  assertStep(!draftInternalTermPattern.test(draft), "draft contains internal implementation terms", {
+    matchedPattern: draftInternalTermPattern.source,
+    draftPreview: draft.slice(0, 1600),
+  });
+  assertStep(
+    communityRumorWatchFailureFixtures.every((fixture) => !draft.includes(fixture)),
+    "draft contains a known failing fixture sentence",
+    {
+      matchedFixtures: communityRumorWatchFailureFixtures.filter((fixture) => draft.includes(fixture)),
+    },
+  );
+  assertStep(!hasPlainIfThen(draft), "draft contains English if/then prose", {
+    draftPreview: draft.slice(0, 1600),
   });
   assertStep(!hasBadAssertion(draft), "draft asserts unverified community signal as fact", {
     title,
     draftPreview: draft.slice(0, 1200),
   });
   assertStep(
-    /GitHub|깃허브|이슈/.test(draft) &&
-      !/GitHub[^.\n]{0,80}(공식\s*확인됨|공식적으로\s*확인|확정)/i.test(draft),
+    /GitHub|깃허브|이슈/.test(draft) && !hasGitHubOfficialOverclaim(draft),
     "draft should mention GitHub issue reinforcement without treating it as official confirmation",
     { draftPreview: draft.slice(0, 1600) },
   );
+  assertStep(personalJudgmentPattern.test(draft), "draft lacks personal judgment or practical response ending", {
+    draftTail: draft.slice(-1600),
+  });
   assertStep(
     /공식\s*출처\s*확인\s*필요|공식\s*확인\s*필요|공식\s*출처|공식\s*확인/.test(reviewReport),
     "reviewReport does not separate official-source checks",
@@ -521,10 +583,30 @@ async function runE2E() {
   assertStep(tags.length >= 8 && tags.length <= 10, "SEO tag count failed", { tags });
   assertStep(!tags.some((tag) => internalTagPattern.test(tag)), "SEO tags contain internal test names", { tags });
   assertStep(sourceTagCount <= 1, "SEO source-name tags are overused", { tags, sourceTagCount });
+  assertStep(
+    requiredCommunityTagPatterns.every((pattern) => tags.some((tag) => pattern.test(tag))),
+    "SEO tags must include Claude Code, Claude Pro, and Opus terms",
+    { tags },
+  );
   assertStep(searchIntentTagCount >= 3, "SEO tags do not prioritize search-intent terms", {
     tags,
     searchIntentTagCount,
   });
+
+  const tistoryExport = await request("GET", `/api/posts/${postId}/export?format=tistory`);
+  const bodyHtml = String(tistoryExport.payload.bodyHtml ?? "");
+  assertStep(tistoryExport.ok && bodyHtml.length > 0, "Tistory export failed", tistoryExport);
+  assertStep(!bodyHtmlMixedMetadataPattern.test(bodyHtml), "Tistory bodyHtml contains mixed SEO/review metadata", {
+    bodyPreview: bodyHtml.slice(0, 1600),
+  });
+  assertStep(!escapedTistoryTagPattern.test(bodyHtml), "Tistory bodyHtml contains escaped Tistory tags", {
+    bodyPreview: bodyHtml.slice(0, 1600),
+  });
+  assertStep(
+    /<p\s+data-ke-size="size16"|<h2\s+data-ke-size="size26"/.test(bodyHtml),
+    "Tistory bodyHtml does not contain expected rendered Tistory tags",
+    { bodyPreview: bodyHtml.slice(0, 1600) },
+  );
 
   const prismaAfter = new PrismaClient();
   const [savedSignal, savedCandidate, logs] = await Promise.all([
@@ -586,7 +668,11 @@ async function runE2E() {
     article: {
       title,
       titleReviewStyle: titleReviewPattern.test(title),
+      titleStayedOnRumorTopic: !titleDriftPattern.test(title),
       draftCautionMatchCount: cautionCount,
+      draftInternalTermsRemoved: true,
+      draftPlainIfThenRemoved: true,
+      personalJudgmentIncluded: true,
       draftBadAssertion: false,
       reviewDecision: publishDecision.slice(0, 180),
     },
@@ -596,6 +682,11 @@ async function runE2E() {
       sourceTagCount,
       searchIntentTagCount,
       tags,
+    },
+    tistoryExport: {
+      bodyHtmlLength: bodyHtml.length,
+      bodyHtmlHasMixedMetadata: false,
+      bodyHtmlHasEscapedTags: false,
     },
     generationLogs: requiredLogActions.map((action) => ({
       action,

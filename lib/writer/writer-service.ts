@@ -12,6 +12,28 @@ import {
 } from "@/lib/writer/provider-factory";
 import type { WriterCompletionInput } from "@/lib/writer/providers/base-provider";
 import type { WriterSourceContext } from "@/lib/writer/source-context";
+import {
+  classifyArticleIntent,
+  findPublicArticleDraftViolations,
+  hasRumorSafetyOverlay,
+  modelComparisonRumorTags,
+  normalizePublicArticleTags,
+  publicArticleForbiddenTerms,
+  type ArticleIntent,
+} from "@/lib/writer/article-intent";
+import {
+  buildCommunityRumorWatchAngle,
+  buildCommunityRumorWatchDraftRequirements,
+  buildCommunityRumorWatchFallbackTitle,
+  buildCommunityRumorWatchSeoRequirements,
+  communityRumorWatchInternalTerms,
+  communityRumorWatchPreferredTags,
+  communityRumorWatchStructure,
+  communityRumorWatchTitleExamples,
+  findCommunityRumorWatchDraftViolations,
+  isCommunityRumorWatchContext,
+  normalizeCommunityRumorWatchTags,
+} from "@/lib/writer/community-writing-mode";
 
 type KeywordCandidate = {
   keyword: string;
@@ -114,7 +136,8 @@ function normalizeMetaDescription(raw: unknown): string {
 
 function normalizeSeoTags(raw: unknown, fallback: string[]) {
   const tags = Array.isArray(raw) ? raw.map((tag) => String(tag).trim()).filter(Boolean) : fallback;
-  const blockedTagPattern = /provider\s*success\s*e2e|generationlog|writerservice|내부\s*테스트|test:e2e/i;
+  const blockedTagPattern =
+    /provider\s*success\s*e2e|generationlog|writerservice|approval\s*guard|openai-compatible\s*provider|next\.?js\s*api\s*route|tistory\s*export|api\s*route|내부\s*구현명|내부\s*테스트|test:e2e/i;
   const broadStandaloneTags = new Set(["AI", "SEO", "자동화"]);
   const result: string[] = [];
   let dcinsideTagCount = 0;
@@ -130,6 +153,79 @@ function normalizeSeoTags(raw: unknown, fallback: string[]) {
   }
 
   return result.slice(0, 10);
+}
+
+function buildStandardDraftRequirements() {
+  return {
+    recommendedLength: "6,000-9,000 Korean characters",
+    maxH2Sections: "6-7",
+    useH3OnlyWhenNecessary: true,
+    maxCodeBlocks: 2,
+    maxTables: 2,
+    maxFailureCases: 3,
+    maxConditionalRuleGroups: 4,
+    compressionRulesForHighReasoningModels: [
+      "Think deeply but write compactly.",
+      "Select only important conditions and exceptions.",
+      "Do not repeat the same conclusion in multiple sections.",
+      "Prefer reader decision criteria over internal implementation detail.",
+      "Keep the article readable as a blog post, not a design document.",
+    ],
+    minimumConcreteExamples: 3,
+    minimumConditionalRules: 3,
+    minimumFailureCases: 2,
+    requiredExampleTypes: [
+      "DB model example",
+      "API route example",
+      "provider selection example",
+      "failure handling example",
+      "review or approval condition example",
+      "operator UI/workflow example",
+    ],
+    suggestedFailureCases: [
+      "provider connection failed but UI looked like success",
+      "post could become approved before reviewReport existed",
+      "scoring sent a practical candidate to hold",
+      "PowerShell inline test script triggered Defender detection",
+    ],
+    claimSafetyRules: [
+      "Use 현재 구현 기준 for implementation-specific statements.",
+      "Use 추정 when external trend/search/news/community data is missing.",
+      "Use 확인 필요 for latest API behavior, pricing, policy, security, or product feature claims.",
+      "Do not claim traffic, ranking, cost saving, or productivity improvement as guaranteed.",
+    ],
+    scopeRules: [
+      "writing automation MVP is in scope",
+      "automatic publishing is out of scope or later phase",
+      "server API routes must mediate model calls",
+      "do not expose API keys or OAuth tokens to browser",
+    ],
+    internalTermRules: {
+      limitInternalTermsInHeadingsAndTitle: true,
+      useAsRefuseHubImplementationExamplesOnly: true,
+      explainBeforeUse: {
+        WriterService: "초안 생성 서비스",
+        GenerationLog: "생성 로그",
+        "approval guard": "승인 차단 로직",
+        "scoring v2": "글감 점수 계산 규칙",
+        "oauth-proxy": "로컬 인증 프록시",
+        "provider success E2E": "provider 연결 검증 테스트",
+      },
+      preferPlainLanguageFirst: [
+        "초안 생성 서비스",
+        "생성 로그",
+        "승인 차단 로직",
+        "글감 점수 계산 규칙",
+        "로컬 인증 프록시",
+        "provider 연결 검증 테스트",
+      ],
+    },
+    codeExampleRules: [
+      "Use short pseudocode only.",
+      "Do not provide full copy-paste implementation.",
+      "Add a caution that authentication, authorization, input validation, and exception handling must be adapted to the actual project.",
+    ],
+  };
 }
 
 function keywordFallback(topic: string, optionalKeywords: string[] = []): KeywordCandidate[] {
@@ -462,6 +558,236 @@ export class WriterService {
     }
   }
 
+  private async generateCommunityRumorWatchDraft(params: {
+    post: Pick<Post, "id" | "title" | "angle" | "outline">;
+    rawTopic: string;
+    keyword: string;
+    blogProfile: BlogProfile;
+    sourceContext: WriterSourceContext | null | undefined;
+    fallbackDraft: string;
+  }) {
+    const sourceContext = params.sourceContext;
+    const sourceMaterial = {
+      communitySignal: sourceContext?.communitySignal,
+      reinforcementSignals: (sourceContext?.reinforcementSignals ?? []).slice(0, 3).map((signal) => ({
+        title: signal.title,
+        url: signal.url,
+        repository: signal.repository,
+        commentCount: signal.commentCount,
+        reactionCount: signal.reactionCount,
+        updatedAt: signal.updatedAt,
+        verificationStatus: signal.verificationStatus,
+      })),
+      officialSources: sourceContext?.officialSources ?? [],
+      officialSourceStatus:
+        sourceContext?.officialSources && sourceContext.officialSources.length > 0 ? "official sources provided" : "공식 확인 없음",
+      verificationStatus: sourceContext?.verificationStatus,
+      riskLevel: sourceContext?.riskLevel,
+    };
+    const bannedTerms = communityRumorWatchInternalTerms.join(", ");
+    const baseMessages: WriterCompletionInput["messages"] = [
+      {
+        role: "system",
+        content: [
+          "You are writing a Korean personal blog article in community_rumor_watch mode.",
+          "Return markdown article body only. Do not return SEO metadata, tags, review report, JSON, or export package.",
+          "This mode is a hard override. Do not use any generic technical implementation article rules.",
+          "Allowed flow only: 루머/떡밥 감지 → 자료 확인 → 내 판단 → 대응 기준.",
+          "Use exactly these H2 sections:",
+          "1. 지금 어떤 말이 돌고 있나",
+          "2. 왜 사람들이 민감하게 보는가",
+          "3. GitHub 이슈나 보강 신호에서는 무엇이 보이나",
+          "4. 아직 확인해야 할 것",
+          "5. 개인적으로 보는 대응 방향",
+          "6. 마무리",
+          "Do not assert the community signal as confirmed fact.",
+          "Use phrases like 이런 말이 돌고 있다, 아직 공식 확인은 없다, 확인 필요한 신호.",
+          "GitHub Issues are reinforcement signals only, not official announcements.",
+          "Mention alternatives such as Codex, ChatGPT, or Gemini CLI only briefly as backup candidates, never as the article center.",
+          "Do not write English if/then conditional sentences. Do not use code blocks.",
+          `Never include these internal implementation terms or topics: ${bannedTerms}.`,
+          "Never discuss DB models, API routes, provider/fallback design, generation logs, approval workflow, Tistory export, publish API, or app architecture.",
+          "Do not fabricate direct experience. If direct testing is not provided, phrase the ending as personal judgment or operating principle.",
+          "End with a cautious personal judgment and a practical check principle.",
+        ].join(" "),
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          title: params.post.title,
+          angle: params.post.angle,
+          rawTopic: params.rawTopic,
+          keyword: params.keyword,
+          outline: params.post.outline,
+          sourceMaterial,
+          blogTone: params.blogProfile.defaultTone,
+          requiredToneExamples: [
+            "커뮤니티에서는 이런 이야기가 올라왔다.",
+            "GitHub Issues 쪽에서도 비슷한 혼란을 말하는 글이 보이지만, 이것만으로 공식 변경이라고 보기는 어렵다.",
+            "개인적으로는 바로 갈아타기보다, 내가 어떤 작업에서 Opus에 의존하고 있었는지 먼저 보는 편이 낫다고 본다.",
+          ],
+          forbiddenExamples: [
+            "DB model에 GenerationLog 필드를 추가한다.",
+            "/api/internal/generations route를 만든다.",
+            "verificationStatus가 needs_manual_review이면...",
+            "if 공식 확인이 나오면 then...",
+          ],
+        }),
+      },
+    ];
+
+    const response = await this.complete({
+      temperature: 0.2,
+      messages: baseMessages,
+    });
+    const draft = response?.trim() || params.fallbackDraft;
+    const violations = findCommunityRumorWatchDraftViolations(draft);
+    if (violations.length === 0) return draft;
+
+    const rewritten = await this.complete({
+      temperature: 0.1,
+      messages: [
+        {
+          role: "system",
+          content: [
+            "Rewrite the draft into community_rumor_watch mode and return markdown article body only.",
+            "Remove every violation. Do not preserve forbidden implementation material.",
+            "No if/then. No code blocks. No SEO metadata. No tags. No review report.",
+            "Use only the six H2 sections requested by the user.",
+            `Forbidden terms/topics: ${bannedTerms}.`,
+          ].join(" "),
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            violations,
+            sourceMaterial,
+            draft,
+          }),
+        },
+      ],
+    });
+    const rewrittenDraft = rewritten?.trim() || params.fallbackDraft;
+    const rewriteViolations = findCommunityRumorWatchDraftViolations(rewrittenDraft);
+
+    return rewriteViolations.length === 0 ? rewrittenDraft : params.fallbackDraft;
+  }
+
+  private async generateModelComparisonGuideDraft(params: {
+    post: Pick<Post, "id" | "title" | "angle" | "outline">;
+    rawTopic: string;
+    keyword: string;
+    blogProfile: BlogProfile;
+    sourceContext: WriterSourceContext | null | undefined;
+    articleIntent: ArticleIntent;
+    fallbackDraft: string;
+  }) {
+    const sourceContext = params.sourceContext;
+    const sourceMaterial = {
+      communitySignal: sourceContext?.communitySignal,
+      reinforcementSignals: (sourceContext?.reinforcementSignals ?? []).slice(0, 3).map((signal) => ({
+        title: signal.title,
+        url: signal.url,
+        repository: signal.repository,
+        commentCount: signal.commentCount,
+        reactionCount: signal.reactionCount,
+        updatedAt: signal.updatedAt,
+        verificationStatus: signal.verificationStatus,
+      })),
+      officialSources: sourceContext?.officialSources ?? [],
+      officialSourceStatus:
+        sourceContext?.officialSources && sourceContext.officialSources.length > 0 ? "official sources provided" : "공식 확인 없음",
+      verificationStatus: sourceContext?.verificationStatus,
+      riskLevel: sourceContext?.riskLevel,
+      overlays: params.articleIntent.overlays,
+    };
+    const bannedTerms = publicArticleForbiddenTerms.join(", ");
+    const baseMessages: WriterCompletionInput["messages"] = [
+      {
+        role: "system",
+        content: [
+          "You are writing a Korean public blog article in model_comparison_guide mode with rumor_safety_overlay when present.",
+          "Return markdown article body only. Do not return SEO metadata, tags, review report, JSON, or export package.",
+          "This mode is a hard override. Do not use internal project implementation examples.",
+          "The article must answer the reader's practical question: when should Claude Code users choose Sonnet, and when is Opus worth using?",
+          "Start with the conclusion: Sonnet은 기본 작업용, Opus는 실패 비용이 큰 작업용.",
+          "Use exactly these H2 sections:",
+          "1. 결론: Sonnet은 기본 작업, Opus는 실패 비용이 큰 작업",
+          "2. 먼저 확인할 사실: Opus 전체 중단인지, 특정 모델 ID 퇴역인지",
+          "3. Claude Code에서 Opus와 Sonnet의 실제 차이",
+          "4. 작업별 추천 기준",
+          "5. Opus 중단설 전에 확인할 체크리스트",
+          "6. 추천 워크플로우",
+          "7. 결론",
+          "If official sources are missing, write 확인 필요 and do not assert shutdown or availability changes as fact.",
+          "GitHub Issues are reinforcement signals only, not official announcements.",
+          "Do not drift into REFUSE HUB internals, blog automation architecture, DB/API/provider/fallback design, approval workflows, or export logic.",
+          "Do not write English if/then conditional sentences. Use natural Korean prose.",
+          `Never include these internal implementation terms: ${bannedTerms}.`,
+          "Keep alternatives like Codex, ChatGPT, or Gemini CLI secondary. The center is Opus/Sonnet task selection.",
+          "End with a practical personal judgment about checking one's own account/model selector and not overreacting before official confirmation.",
+        ].join(" "),
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          title: params.post.title,
+          angle: params.post.angle,
+          rawTopic: params.rawTopic,
+          keyword: params.keyword,
+          outline: params.post.outline,
+          sourceMaterial,
+          blogTone: params.blogProfile.defaultTone,
+          requiredConclusion:
+            "Sonnet은 기본 작업용으로 두고, Opus는 실패 비용이 큰 설계·검토·난도 높은 디버깅에 제한적으로 쓰는 기준을 먼저 제시한다.",
+          forbiddenExamples: [
+            "DB model에 GenerationLog 필드를 추가한다.",
+            "/api/internal/generations route에서 provider 호출 흐름 설명",
+            "verificationStatus가 needs_manual_review이면...",
+            "if 공식 확인이 나온다, then...",
+          ],
+        }),
+      },
+    ];
+
+    const response = await this.complete({
+      temperature: 0.2,
+      messages: baseMessages,
+    });
+    const draft = response?.trim() || params.fallbackDraft;
+    const violations = findPublicArticleDraftViolations(draft, params.articleIntent);
+    if (violations.length === 0) return draft;
+
+    const rewritten = await this.complete({
+      temperature: 0.1,
+      messages: [
+        {
+          role: "system",
+          content: [
+            "Rewrite the draft into model_comparison_guide mode and return markdown article body only.",
+            "Remove every violation. Do not preserve forbidden implementation material.",
+            "No if/then. No code blocks. No SEO metadata. No tags. No review report.",
+            "Use only the seven H2 sections requested by the user.",
+            "Keep the conclusion first: Sonnet is for default work, Opus is for high failure-cost work.",
+            `Forbidden terms/topics: ${bannedTerms}.`,
+          ].join(" "),
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            violations,
+            sourceMaterial,
+            draft,
+          }),
+        },
+      ],
+    });
+    const rewrittenDraft = rewritten?.trim() || params.fallbackDraft;
+    const rewriteViolations = findPublicArticleDraftViolations(rewrittenDraft, params.articleIntent);
+
+    return rewriteViolations.length === 0 ? rewrittenDraft : params.fallbackDraft;
+  }
+
   async generateKeywordCandidates(params: {
     rawTopic: string;
     memo?: string | null;
@@ -508,7 +834,7 @@ export class WriterService {
                       titleCandidates: ["string", "string", "string"],
                     },
                   ],
-                },
+                }
               }),
             },
           ],
@@ -781,15 +1107,43 @@ export class WriterService {
     blogProfile: BlogProfile;
     sourceContext?: WriterSourceContext | null;
   }): Promise<WriterGenerationResult<AngleResult>> {
+    const articleIntent = classifyArticleIntent({
+      rawTopic: params.rawTopic,
+      keyword: params.keyword,
+      rationale: params.rationale,
+      sourceContext: params.sourceContext,
+    });
+    const isCommunityRumorWatch = articleIntent.primaryIntent === "community_rumor_watch";
+    const isModelComparisonGuide = articleIntent.primaryIntent === "model_comparison_guide";
     const fallback: AngleResult = {
-      angle: `${params.keyword}를 ${params.blogProfile.targetAudience} 관점에서 바로 실행 가능한 단계형 가이드로 정리`,
-      title: `${params.keyword} 실전 가이드: 지금 적용 가능한 체크포인트`,
-      reason: "블로그 타깃 독자의 실행 의도를 우선하는 방향입니다.",
-      titleCandidates: [
-        `${params.keyword} 실전 가이드`,
-        `${params.keyword} 적용 체크리스트`,
-        `${params.keyword} 바로 쓰는 방법`,
-      ],
+      angle: isModelComparisonGuide
+        ? "Claude Code에서 Sonnet은 기본 작업용, Opus는 실패 비용이 큰 작업용으로 나누는 선택 기준을 정리"
+        : isCommunityRumorWatch
+        ? buildCommunityRumorWatchAngle(params.keyword)
+        : `${params.keyword}를 ${params.blogProfile.targetAudience} 관점에서 바로 실행 가능한 단계형 가이드로 정리`,
+      title: isModelComparisonGuide
+        ? "Claude Code Opus Sonnet 차이: Opus 중단설 전에 볼 작업 기준"
+        : isCommunityRumorWatch
+        ? buildCommunityRumorWatchFallbackTitle(params.sourceContext, params.keyword)
+        : `${params.keyword} 실전 가이드: 지금 적용 가능한 체크포인트`,
+      reason: isModelComparisonGuide
+        ? "대체 도구 비교가 아니라 Opus/Sonnet 작업 선택 기준과 공식 확인 전 체크포인트를 우선합니다."
+        : isCommunityRumorWatch
+        ? "커뮤니티 조기 신호를 사실로 단정하지 않고, 공식 확인 전 확인 기준과 개인적인 대응 방향을 우선합니다."
+        : "블로그 타깃 독자의 실행 의도를 우선하는 방향입니다.",
+      titleCandidates: isModelComparisonGuide
+        ? [
+            "Claude Code Opus Sonnet 차이: Opus 중단설 전에 볼 작업 기준",
+            "Claude Code에서 Opus와 Sonnet을 나눠 쓰는 기준",
+            "Claude Code Opus 중단설 전에 확인할 Sonnet 선택 기준",
+          ]
+        : isCommunityRumorWatch
+        ? communityRumorWatchTitleExamples
+        : [
+            `${params.keyword} 실전 가이드`,
+            `${params.keyword} 적용 체크리스트`,
+            `${params.keyword} 바로 쓰는 방법`,
+          ],
     };
 
     return this.withLog({
@@ -804,7 +1158,26 @@ export class WriterService {
             {
               role: "system",
               content:
-                "Return only JSON with fields angle, title, reason, titleCandidates(3). If this is based on community-only signals, use review-style titles such as 중단설, 공식 확인 전, 확인해야 할 점, and do not assert the signal as fact. If official sources are confirmed, distinguish official-source facts from community reactions. If contradicted or rejected_as_rumor, frame only as rumor verification failure.",
+                [
+                  "Return only JSON with fields angle, title, reason, titleCandidates(3).",
+                  "If this is based on community-only signals, use review-style titles such as 중단설, 공식 확인 전, 확인해야 할 점, and do not assert the signal as fact.",
+                  "If official sources are confirmed, distinguish official-source facts from community reactions.",
+                  "If contradicted or rejected_as_rumor, frame only as rumor verification failure.",
+                  ...(isCommunityRumorWatch
+                    ? [
+                        "For community_rumor_watch mode, keep the title centered on the rumor/checkpoint itself, not alternative-tool comparison.",
+                        "Prefer titles like Claude Code Opus 제공 중단설, 지금 확인해야 할 것들.",
+                        "Avoid making 대체 도구 the title's main frame.",
+                      ]
+                    : []),
+                  ...(isModelComparisonGuide
+                    ? [
+                        "For model_comparison_guide mode, the title must include Claude Code, Opus, Sonnet, and 차이 or 선택 기준.",
+                        "The title center must be Opus/Sonnet task selection, with Opus 중단설 only as a safety/check context.",
+                        "Avoid internal implementation or automation framing.",
+                      ]
+                    : []),
+                ].join(" "),
             },
             {
               role: "user",
@@ -818,6 +1191,17 @@ export class WriterService {
                   defaultTone: params.blogProfile.defaultTone,
                   preferredStructure: params.blogProfile.preferredStructure,
                 },
+                articleIntent,
+                writingMode: articleIntent.primaryIntent,
+                titleGuidance: isModelComparisonGuide
+                  ? [
+                      "Claude Code Opus Sonnet 차이: Opus 중단설 전에 볼 작업 기준",
+                      "Claude Code에서 Opus와 Sonnet을 나눠 쓰는 기준",
+                      "Claude Code Opus 중단설 전에 확인할 Sonnet 선택 기준",
+                    ]
+                  : isCommunityRumorWatch
+                    ? communityRumorWatchTitleExamples
+                    : undefined,
               }),
             },
           ],
@@ -843,22 +1227,61 @@ export class WriterService {
     blogProfile: BlogProfile;
     sourceContext?: WriterSourceContext | null;
   }): Promise<WriterGenerationResult<OutlineResult>> {
+    const articleIntent = classifyArticleIntent({
+      rawTopic: params.rawTopic,
+      keyword: params.keyword,
+      title: params.post.title,
+      angle: params.post.angle,
+      sourceContext: params.sourceContext,
+    });
+    const isCommunityRumorWatch = articleIntent.primaryIntent === "community_rumor_watch";
+    const isModelComparisonGuide = articleIntent.primaryIntent === "model_comparison_guide";
     const fallback: OutlineResult = {
       title: params.post.title,
-      outline: [
-        "## 문제 정의",
-        "- 독자가 현재 겪는 문제를 2~3문장으로 요약",
-        "## 핵심 개념",
-        "- 개념 3개 이내로 정리",
-        "## 실행 단계",
-        "1. 준비",
-        "2. 설정",
-        "3. 검증",
-        "## 실패 패턴과 대응",
-        "- 자주 발생하는 실수 3가지",
-        "## 체크리스트",
-        "- 적용 전/후 점검 항목",
-      ].join("\n"),
+      outline: isModelComparisonGuide
+        ? [
+            "## 결론: Sonnet은 기본 작업, Opus는 실패 비용이 큰 작업",
+            "- 왜 필요한가: 독자가 먼저 선택 기준을 잡고 세부 설명을 읽게 한다.",
+            "## 먼저 확인할 사실: Opus 전체 중단인지, 특정 모델 ID 퇴역인지",
+            "- 왜 필요한가: 중단설을 사실로 단정하지 않고 확인 대상을 분리한다.",
+            "## Claude Code에서 Opus와 Sonnet의 실제 차이",
+            "- 왜 필요한가: 모델 차이를 체감 작업 기준으로 설명한다.",
+            "## 작업별 추천 기준",
+            "- 왜 필요한가: 독자가 자기 작업을 기준으로 모델을 고를 수 있어야 한다.",
+            "## Opus 중단설 전에 확인할 체크리스트",
+            "- 왜 필요한가: 공식 확인 전 계정/플랜/모델 선택 화면을 점검하게 한다.",
+            "## 추천 워크플로우",
+            "- 왜 필요한가: Sonnet 기본, Opus 제한 사용이라는 운영 기준을 제시한다.",
+            "## 결론",
+            "- 왜 필요한가: 중단 확정이 아니라 확인 필요한 신호라는 태도를 유지한다.",
+          ].join("\n")
+        : isCommunityRumorWatch
+        ? [
+            "## Claude Code Opus 중단설이 왜 나온 걸까",
+            "- 왜 필요한가: 커뮤니티 조기 신호와 공식 발표를 먼저 분리해야 한다.",
+            "## 아직 확정이라고 보기 어려운 이유",
+            "- 왜 필요한가: 공식 문서/릴리즈/상태 페이지 부재를 확인 포인트로 남겨야 한다.",
+            "## 그래도 사용자는 무엇을 확인해야 하나",
+            "- 왜 필요한가: 독자가 자기 계정과 환경에서 직접 점검할 항목이 필요하다.",
+            "## 개인적으로 보는 대응 방향",
+            "- 왜 필요한가: 루머를 믿거나 무시하는 대신 현실적인 대비 기준을 제시한다.",
+            "## 마무리",
+            "- 왜 필요한가: 중단 확정이 아니라 확인 필요한 신호로 정리한다.",
+          ].join("\n")
+        : [
+            "## 문제 정의",
+            "- 독자가 현재 겪는 문제를 2~3문장으로 요약",
+            "## 핵심 개념",
+            "- 개념 3개 이내로 정리",
+            "## 실행 단계",
+            "1. 준비",
+            "2. 설정",
+            "3. 검증",
+            "## 실패 패턴과 대응",
+            "- 자주 발생하는 실수 3가지",
+            "## 체크리스트",
+            "- 적용 전/후 점검 항목",
+          ].join("\n"),
     };
 
     return this.withLog({
@@ -878,7 +1301,26 @@ export class WriterService {
                   "Use H2/H3 and numbered steps, but avoid generic textbook sections.",
                   "Fix one clear central angle before the outline.",
                   "Each section must include one short line explaining why that section is necessary.",
-                  "Reflect the user's actual project context when relevant: provider success E2E, oauth-proxy, WriterService, TrendCandidate, scoring v2, fallback, GenerationLog, approval guard.",
+                  ...(isCommunityRumorWatch
+                    ? [
+                        "This is community_rumor_watch mode.",
+                        "Plan the article as 루머/떡밥 감지 → 근거 확인 → 개인적 판단 → 대응 기준.",
+                        `Use this structure: ${communityRumorWatchStructure.join(" / ")}.`,
+                        `Do not plan sections about these internal implementation terms: ${communityRumorWatchInternalTerms.join(", ")}.`,
+                        "Do not turn this into a Codex/ChatGPT/Gemini CLI replacement comparison or blog automation design article.",
+                      ]
+                    : [
+                        "Reflect the user's actual project context when relevant: provider success E2E, oauth-proxy, WriterService, TrendCandidate, scoring v2, fallback, GenerationLog, approval guard.",
+                      ]),
+                  ...(isModelComparisonGuide
+                    ? [
+                        "This is model_comparison_guide mode.",
+                        "Plan the article around Opus/Sonnet task selection, not internal project implementation.",
+                        "Use the required seven-section structure: conclusion first, facts to confirm, Opus/Sonnet differences, task criteria, rumor checklist, workflow, conclusion.",
+                        "If rumor_safety_overlay is present, require 확인 필요 for unverified shutdown or model availability claims.",
+                        `Do not plan sections about these internal implementation terms: ${publicArticleForbiddenTerms.join(", ")}.`,
+                      ]
+                    : []),
                   "If external trend/search/news/community data is missing, mark the related score or trend claim as estimated.",
                   "If sourceContext is community_only, plan the article as a community early-signal check and require official confirmation before factual claims.",
                   "If sourceContext.reinforcementSignals includes GitHub Issues, treat them only as needs_manual_review reinforcement signals, not official confirmation.",
@@ -908,24 +1350,67 @@ export class WriterService {
                 },
                 outlineRequirements: {
                   centralAngleExamples: [
-                    "자동 작성기에서 어려운 건 글쓰기보다 글감 선별이다",
-                    "구독형 GPT를 자동화하려면 로컬 도구와 공개 서비스 기준을 분리해야 한다",
-                    "자동 발행보다 먼저 검수 가능한 초안 품질이 중요하다",
+                    ...(isCommunityRumorWatch
+                      ? [
+                          "Claude Code Opus 중단설은 확정 뉴스가 아니라 확인 필요한 커뮤니티 조기 신호다",
+                          "GitHub Issues는 보강 신호이지 공식 발표가 아니다",
+                          "바로 갈아타기보다 자기 계정과 공식 문서 확인 기준을 먼저 세운다",
+                        ]
+                      : isModelComparisonGuide
+                        ? [
+                            "Sonnet은 기본 작업용, Opus는 실패 비용이 큰 작업용이다",
+                            "Opus 중단설 전에는 전체 중단인지 특정 모델 ID 퇴역인지 확인한다",
+                            "Claude Code 모델 선택은 작업 난도와 실패 비용 기준으로 나눈다",
+                          ]
+                      : [
+                          "자동 작성기에서 어려운 건 글쓰기보다 글감 선별이다",
+                          "구독형 GPT를 자동화하려면 로컬 도구와 공개 서비스 기준을 분리해야 한다",
+                          "자동 발행보다 먼저 검수 가능한 초안 품질이 중요하다",
+                        ]),
                   ],
                   avoid: [
                     "too generic AI introduction",
                     "standard 문제 정의/핵심 개념/실행 단계 only without project-specific sections",
                     "claims about trend/search volume without saying estimated when external data is unavailable",
+                    ...(isCommunityRumorWatch
+                      ? [
+                          "alternative-tool comparison as the main article frame",
+                          "internal implementation terms such as WriterService, GenerationLog, API route, provider success E2E",
+                          "if/then style English conditional sentences in normal prose",
+                        ]
+                      : isModelComparisonGuide
+                        ? [
+                            "internal implementation terms such as WriterService, GenerationLog, API route, provider success E2E",
+                            "alternative-tool comparison as the main article frame",
+                            "if/then style English conditional sentences in normal prose",
+                          ]
+                      : []),
                   ],
-                  mustIncludeWhenRelevant: [
-                    "DB/API/provider 구조",
-                    "server-only model call path",
-                    "fallback and generationStatus distinction",
-                    "approval guard before approved",
-                    "GenerationLog audit trail",
-                    "direct experience vs external user opinion distinction",
-                    "source-backed user opinion categories when sources are provided",
-                  ],
+                  mustIncludeWhenRelevant: isCommunityRumorWatch
+                    ? [
+                        "DCInside/community signal as an early signal, not fact",
+                        "GitHub Issues as reinforcement only, not official confirmation",
+                        "official documentation/release/status page check points",
+                        "account, region, plan, and model selector differences",
+                        "personal judgment and realistic response criteria",
+                      ]
+                    : isModelComparisonGuide
+                      ? [
+                          "Sonnet as default work model",
+                          "Opus as high failure-cost work model",
+                          "official source check for Opus shutdown rumor",
+                          "Claude Code model selector, plan guide, release notes, status page",
+                          "GitHub Issues as reinforcement only, not official confirmation",
+                        ]
+                    : [
+                        "DB/API/provider 구조",
+                        "server-only model call path",
+                        "fallback and generationStatus distinction",
+                        "approval guard before approved",
+                        "GenerationLog audit trail",
+                        "direct experience vs external user opinion distinction",
+                        "source-backed user opinion categories when sources are provided",
+                      ],
                   userOpinionRules: [
                     "Use external opinions only when actual source material is provided and directly used as evidence.",
                     "If no source material is provided, omit external-opinion sections from the reader-facing outline.",
@@ -953,23 +1438,73 @@ export class WriterService {
     blogProfile: BlogProfile;
     sourceContext?: WriterSourceContext | null;
   }): Promise<WriterGenerationResult<DraftResult>> {
+    const articleIntent = classifyArticleIntent({
+      rawTopic: params.rawTopic,
+      keyword: params.keyword,
+      title: params.post.title,
+      angle: params.post.angle,
+      sourceContext: params.sourceContext,
+    });
+    const isCommunityRumorWatch = articleIntent.primaryIntent === "community_rumor_watch";
+    const isModelComparisonGuide = articleIntent.primaryIntent === "model_comparison_guide";
     const fallbackDraft = [
       `# ${params.post.title}`,
       "",
-      "## 문제 정의",
-      `${params.rawTopic}를 다룰 때 실무에서 가장 자주 막히는 지점을 먼저 정리합니다.`,
+      ...(isModelComparisonGuide
+        ? [
+            "## 결론: Sonnet은 기본 작업, Opus는 실패 비용이 큰 작업",
+            "Claude Code에서 Sonnet은 기본 코딩 작업과 반복 수정에 두고, Opus는 실패 비용이 큰 설계 검토와 난도 높은 디버깅에 제한적으로 쓰는 편이 현실적입니다.",
+            "",
+            "## 먼저 확인할 사실: Opus 전체 중단인지, 특정 모델 ID 퇴역인지",
+            "아직 공식 확인 전이라면 중단 확정이 아니라 확인 필요한 신호로 봐야 합니다.",
+            "",
+            "## 작업별 추천 기준",
+            "- 일반 수정과 반복 작업: Sonnet",
+            "- 큰 설계 변경과 실패 비용이 큰 판단: Opus",
+            "",
+            "## 마무리",
+            "지금은 Opus 중단 확정이 아니라 확인 필요한 신호입니다. 공식 출처와 내 계정의 모델 선택 화면을 함께 확인하는 편이 낫습니다.",
+          ]
+        : isCommunityRumorWatch
+        ? [
+            "## Claude Code Opus 중단설이 왜 나온 걸까",
+            "커뮤니티에서 나온 이야기를 먼저 조기 신호로 분리해 봅니다. 아직 공식 확인 전이므로 확정 사실처럼 다루지 않습니다.",
+            "",
+            "## 아직 확정이라고 보기 어려운 이유",
+            "공식 문서, 공식 블로그, 릴리즈 노트, 상태 페이지에서 같은 내용이 확인되기 전까지는 중단설로 두는 편이 안전합니다.",
+            "",
+            "## 그래도 사용자는 무엇을 확인해야 하나",
+            "- Claude Code 모델 선택 화면",
+            "- Claude Pro 요금제 안내",
+            "- Anthropic 공식 changelog",
+            "- 관련 GitHub Issues",
+            "",
+            "## 개인적으로 보는 대응 방향",
+            "개인적으로는 바로 갈아타기보다 중요한 작업에서 쓸 보완 후보와 확인 루틴을 먼저 점검할 타이밍으로 봅니다.",
+          ]
+        : [
+            "## 문제 정의",
+            `${params.rawTopic}를 다룰 때 실무에서 가장 자주 막히는 지점을 먼저 정리합니다.`,
+          ]),
       "",
-      "## 핵심 개념",
-      "- 핵심 개념 A",
-      "- 핵심 개념 B",
-      "",
-      "## 실행 단계",
-      "1. 현재 상태 점검",
-      "2. 최소 설정으로 시작",
-      "3. 측정 지표로 검증",
-      "",
-      "## 체크리스트",
-      "- 오늘 바로 적용할 3가지",
+      ...(isCommunityRumorWatch
+        ? [
+            "## 마무리",
+            "지금은 중단 확정이 아니라 확인 필요한 신호입니다. 사용하는 사람은 자기 계정과 공식 출처를 직접 확인하는 편이 낫습니다.",
+          ]
+        : [
+            "## 핵심 개념",
+            "- 핵심 개념 A",
+            "- 핵심 개념 B",
+            "",
+            "## 실행 단계",
+            "1. 현재 상태 점검",
+            "2. 최소 설정으로 시작",
+            "3. 측정 지표로 검증",
+            "",
+            "## 체크리스트",
+            "- 오늘 바로 적용할 3가지",
+          ]),
     ].join("\n");
 
     return this.withLog({
@@ -978,6 +1513,51 @@ export class WriterService {
       outputSummary: (result) => summarize(result.draft, 140),
       onErrorFallback: () => ({ draft: fallbackDraft }),
       runner: async () => {
+        const draftQualityRequirements = isCommunityRumorWatch
+          ? buildCommunityRumorWatchDraftRequirements(params.sourceContext)
+          : buildStandardDraftRequirements();
+        const optionalSectionsWhenSupported = isCommunityRumorWatch
+          ? [
+              "커뮤니티에서 어떤 말이 돌고 있는지",
+              "아직 확정이라고 보기 어려운 이유",
+              "사용자가 직접 확인해야 할 것",
+              "개인적으로 보는 대응 방향",
+              "추천하는 대응",
+              "추천하지 않는 대응",
+            ]
+          : [
+              "내가 겪은 문제",
+              "출처가 제공된 사용자 불편함",
+              "출처가 제공된 의견 갈림",
+              "내 환경에서의 판단",
+              "추천하는 경우",
+              "추천하지 않는 경우",
+            ];
+        if (isCommunityRumorWatch) {
+          return {
+            draft: await this.generateCommunityRumorWatchDraft({
+              post: params.post,
+              rawTopic: params.rawTopic,
+              keyword: params.keyword,
+              blogProfile: params.blogProfile,
+              sourceContext: params.sourceContext,
+              fallbackDraft,
+            }),
+          };
+        }
+        if (isModelComparisonGuide) {
+          return {
+            draft: await this.generateModelComparisonGuideDraft({
+              post: params.post,
+              rawTopic: params.rawTopic,
+              keyword: params.keyword,
+              blogProfile: params.blogProfile,
+              sourceContext: params.sourceContext,
+              articleIntent,
+              fallbackDraft,
+            }),
+          };
+        }
         const response = await this.complete({
           temperature: 0.4,
           messages: [
@@ -985,7 +1565,9 @@ export class WriterService {
               role: "system",
               content:
                 [
-                  "You are a technical blog writer for practical local-tool articles.",
+                  isCommunityRumorWatch
+                    ? "You are a Korean blog writer covering AI/developer-tool community rumors with cautious personal judgment."
+                    : "You are a technical blog writer for practical local-tool articles.",
                   "Return markdown article draft only.",
                   "Recommended body length is 6,000-9,000 Korean characters. Do not exceed this range unless the outline absolutely requires it.",
                   "Use at most 6-7 H2 sections. Use H3 only when it prevents confusion.",
@@ -999,9 +1581,25 @@ export class WriterService {
                   "Keep the tone realistic: no hype, no unconditional recommendations, prefer tradeoffs and 'possible, but only if...' judgments.",
                   "Reduce AI-written feel: avoid overly polished summaries, repeated neat conclusions, and promotional wording.",
                   "Write as if a careful operator is explaining real friction: blocked points, changed judgment, uncertainty, exceptions, and conditional decisions.",
-                  "Include at least 3 concrete examples, such as DB model, API route, provider choice, failure case, review condition, or an operator button/workflow.",
-                  "Include at least 3 conditional decision rules in the form 'if A, then B; if C, then D'.",
-                  "Include at least 2 failure cases and what should prevent or detect them.",
+                  ...(isCommunityRumorWatch
+                    ? [
+                        "This is community_rumor_watch mode.",
+                        "Write in the flow 루머/떡밥 감지 → 근거 확인 → 개인적 판단 → 대응 기준.",
+                        `Use these sections as the backbone: ${communityRumorWatchStructure.join(" / ")}.`,
+                        "Focus on the Claude Code Opus availability rumor and what readers should verify.",
+                        "Do not turn the article into a Codex/ChatGPT/Gemini CLI replacement comparison. Mention alternatives only briefly as fallback or backup candidates when necessary.",
+                        `Do not include these internal implementation terms unless the article topic is the blog automation app itself: ${communityRumorWatchInternalTerms.join(", ")}.`,
+                        "Do not discuss blog automation architecture, publishing automation, Tistory export, provider structure, API routes, or internal test logs in this article.",
+                        "Do not use English if/then conditional sentences in normal prose. Use natural Korean condition sentences instead.",
+                        "Include concrete verification examples such as model selector, plan guide, official documentation, official changelog, status page, and relevant GitHub Issues.",
+                        "Include a personal judgment section. Do not fabricate direct experience; phrase it as judgment or operating principle when direct testing was not provided.",
+                        "End with a personal but cautious conclusion: this is not confirmed shutdown, it is a signal worth checking in one's own account and official sources.",
+                      ]
+                    : [
+                        "Include at least 3 concrete examples, such as DB model, API route, provider choice, failure case, review condition, or an operator button/workflow.",
+                        "Include at least 3 conditional decision rules in the form 'if A, then B; if C, then D'.",
+                        "Include at least 2 failure cases and what should prevent or detect them.",
+                      ]),
                   "Mark claims requiring current evidence as '확인 필요', '추정', or '현재 구현 기준'. This applies to latest information, prices, policies, product features, search volume, trends, and security claims.",
                   "Do not invent source links when no external search data is provided.",
                   "If sourceContext contains only community signals, write '커뮤니티에서 이런 이야기가 나왔다', '공식 확인 필요', or equivalent review-style language. Do not state launches, shutdowns, pricing, policy, or availability as confirmed.",
@@ -1017,12 +1615,20 @@ export class WriterService {
                   "Do not list external opinion sources unless they are actually provided and used as evidence.",
                   "Mention user opinions only when they are central to the topic. Otherwise write only topic-relevant judgment, examples, and check principles.",
                   "When sourced opinions are available, summarize or paraphrase them and classify them as common complaints, common strengths, divided opinions, beginner confusion, or operational issues.",
-                  "Always distinguish writing automation MVP from publishing automation; treat automatic publishing as a later, separate concern.",
+                  ...(isCommunityRumorWatch
+                    ? []
+                    : [
+                        "Always distinguish writing automation MVP from publishing automation; treat automatic publishing as a later, separate concern.",
+                      ]),
                   "Avoid generic AI introductions and generic productivity claims unless tied to a concrete implementation detail.",
-                  "Limit internal project terms. Explain them briefly in plain language before using them: WriterService means 초안 생성 서비스, GenerationLog means 생성 로그, approval guard means 승인 차단 로직, scoring v2 means 글감 점수 계산 규칙, oauth-proxy means 로컬 인증 프록시, provider success E2E means provider 연결 검증 테스트.",
-                  "Use internal project terms only as REFUSE HUB implementation examples. Do not overload headings, tags, or titles with them.",
-                  "Code examples must be short pseudocode for explaining structure, not copy-paste full implementations.",
-                  "When including pseudocode, add a caution that authentication, authorization, input validation, and exception handling must be adapted to the real project.",
+                  ...(isCommunityRumorWatch
+                    ? []
+                    : [
+                        "Limit internal project terms. Explain them briefly in plain language before using them: WriterService means 초안 생성 서비스, GenerationLog means 생성 로그, approval guard means 승인 차단 로직, scoring v2 means 글감 점수 계산 규칙, oauth-proxy means 로컬 인증 프록시, provider success E2E means provider 연결 검증 테스트.",
+                        "Use internal project terms only as REFUSE HUB implementation examples. Do not overload headings, tags, or titles with them.",
+                        "Code examples must be short pseudocode for explaining structure, not copy-paste full implementations.",
+                        "When including pseudocode, add a caution that authentication, authorization, input validation, and exception handling must be adapted to the real project.",
+                      ]),
                   "Optionally include user-opinion sections only when actual source material is provided and central to the article.",
                   "End with a practical personal judgment, operating principle, or checklist rather than a safety disclaimer.",
                 ].join(" "),
@@ -1044,75 +1650,7 @@ export class WriterService {
                   htmlRules: params.blogProfile.htmlRules,
                   tooltipRules: params.blogProfile.tooltipRules,
                 },
-                draftQualityRequirements: {
-                  recommendedLength: "6,000-9,000 Korean characters",
-                  maxH2Sections: "6-7",
-                  useH3OnlyWhenNecessary: true,
-                  maxCodeBlocks: 2,
-                  maxTables: 2,
-                  maxFailureCases: 3,
-                  maxConditionalRuleGroups: 4,
-                  compressionRulesForHighReasoningModels: [
-                    "Think deeply but write compactly.",
-                    "Select only important conditions and exceptions.",
-                    "Do not repeat the same conclusion in multiple sections.",
-                    "Prefer reader decision criteria over internal implementation detail.",
-                    "Keep the article readable as a blog post, not a design document.",
-                  ],
-                  minimumConcreteExamples: 3,
-                  minimumConditionalRules: 3,
-                  minimumFailureCases: 2,
-                  requiredExampleTypes: [
-                    "DB model example",
-                    "API route example",
-                    "provider selection example",
-                    "failure handling example",
-                    "review or approval condition example",
-                    "operator UI/workflow example",
-                  ],
-                  suggestedFailureCases: [
-                    "provider connection failed but UI looked like success",
-                    "post could become approved before reviewReport existed",
-                    "scoring sent a practical candidate to hold",
-                    "PowerShell inline test script triggered Defender detection",
-                  ],
-                  claimSafetyRules: [
-                    "Use 현재 구현 기준 for implementation-specific statements.",
-                    "Use 추정 when external trend/search/news/community data is missing.",
-                    "Use 확인 필요 for latest API behavior, pricing, policy, security, or product feature claims.",
-                    "Do not claim traffic, ranking, cost saving, or productivity improvement as guaranteed.",
-                  ],
-                  scopeRules: [
-                    "writing automation MVP is in scope",
-                    "automatic publishing is out of scope or later phase",
-                    "server API routes must mediate model calls",
-                    "do not expose API keys or OAuth tokens to browser",
-                  ],
-                  internalTermRules: {
-                    limitInternalTermsInHeadingsAndTitle: true,
-                    useAsRefuseHubImplementationExamplesOnly: true,
-                    explainBeforeUse: {
-                      WriterService: "초안 생성 서비스",
-                      GenerationLog: "생성 로그",
-                      "approval guard": "승인 차단 로직",
-                      "scoring v2": "글감 점수 계산 규칙",
-                      "oauth-proxy": "로컬 인증 프록시",
-                      "provider success E2E": "provider 연결 검증 테스트",
-                    },
-                    preferPlainLanguageFirst: [
-                      "초안 생성 서비스",
-                      "생성 로그",
-                      "승인 차단 로직",
-                      "글감 점수 계산 규칙",
-                      "로컬 인증 프록시",
-                      "provider 연결 검증 테스트",
-                    ],
-                  },
-                  codeExampleRules: [
-                    "Use short pseudocode only.",
-                    "Do not provide full copy-paste implementation.",
-                    "Add a caution that authentication, authorization, input validation, and exception handling must be adapted to the actual project.",
-                  ],
+                draftQualityRequirements,
                   userOpinionRules: [
                     "Do not create fake user reviews or fake comments.",
                     "Do not present unsourced opinions as real community reactions.",
@@ -1124,22 +1662,43 @@ export class WriterService {
                     "Do not turn BlogProfile validation rules into reader-facing prose.",
                     "User-opinion material should appear only when it directly supports the article.",
                   ],
-                  optionalSectionsWhenSupported: [
-                    "내가 겪은 문제",
-                    "출처가 제공된 사용자 불편함",
-                    "출처가 제공된 의견 갈림",
-                    "내 환경에서의 판단",
-                    "추천하는 경우",
-                    "추천하지 않는 경우",
-                  ],
-                },
-              }),
+                  optionalSectionsWhenSupported,
+                }
+              ),
             },
           ],
         });
 
+        const draft = response?.trim() || fallbackDraft;
+        const violations = findPublicArticleDraftViolations(draft, articleIntent);
+
+        if (violations.length === 0) {
+          return { draft };
+        }
+
+        const rewritten = await this.complete({
+          temperature: 0.1,
+          messages: [
+            {
+              role: "system",
+              content:
+                "Rewrite the public blog draft in Korean. Remove internal implementation details and English if/then prose. Return markdown article body only.",
+            },
+            {
+              role: "user",
+              content: JSON.stringify({
+                articleIntent,
+                violations,
+                draft,
+              }),
+            },
+          ],
+        });
+        const rewrittenDraft = rewritten?.trim() || fallbackDraft;
+        const rewrittenViolations = findPublicArticleDraftViolations(rewrittenDraft, articleIntent);
+
         return {
-          draft: response?.trim() || fallbackDraft,
+          draft: rewrittenViolations.length === 0 ? rewrittenDraft : fallbackDraft,
         };
       },
     });
@@ -1150,6 +1709,13 @@ export class WriterService {
     blogProfile: BlogProfile;
     sourceContext?: WriterSourceContext | null;
   }): Promise<WriterGenerationResult<ReviewResult>> {
+    const articleIntent = classifyArticleIntent({
+      title: params.post.title,
+      memo: params.post.draft,
+      sourceContext: params.sourceContext,
+    });
+    const isCommunityRumorWatch = articleIntent.primaryIntent === "community_rumor_watch";
+    const isModelComparisonGuide = articleIntent.primaryIntent === "model_comparison_guide";
     const fallback = [
       "## 검수 요약",
       "- 구조: 통과",
@@ -1198,6 +1764,24 @@ export class WriterService {
                   "Flag defensive disclaimers such as '사용자 의견 없음', '외부 사용자 의견은 다루지 않습니다', or source lists inserted only to satisfy internal rules.",
                   "Flag sections that list external opinion sources but do not use them as evidence.",
                   "Flag unnecessary safety notices that fill the ending instead of a topic-relevant judgment or check principle.",
+                  ...(isCommunityRumorWatch
+                    ? [
+                        "For community_rumor_watch drafts, check that the article stays on the rumor/checkpoint topic and does not drift into internal implementation, blog automation architecture, or alternative-tool comparison.",
+                        `Flag unnecessary internal implementation terms: ${communityRumorWatchInternalTerms.join(", ")}.`,
+                        "Flag English if/then conditional sentences in normal prose.",
+                        "Check that GitHub Issues are described only as reinforcement signals, not official announcements.",
+                        "Check that the ending includes personal judgment or operating principle, not only a defensive disclaimer.",
+                      ]
+                    : []),
+                  ...(isModelComparisonGuide
+                    ? [
+                        "For model_comparison_guide drafts, check that the article leads with the conclusion Sonnet은 기본 작업용, Opus는 실패 비용이 큰 작업용.",
+                        "Check that the draft stays centered on Opus/Sonnet selection criteria and does not drift into internal implementation or automation architecture.",
+                        "Check that Opus shutdown rumor is treated as 확인 필요 unless official sources are provided.",
+                        `Flag unnecessary internal implementation terms: ${publicArticleForbiddenTerms.join(", ")}.`,
+                        "Flag English if/then conditional sentences in normal prose.",
+                      ]
+                    : []),
                   "Check whether community_only content is written like confirmed fact.",
                   "Check whether launches, shutdowns, pricing, policy, or API behavior are asserted without official_confirmed status.",
                   "If official source URLs exist, check whether the draft mentions official-source verification instead of relying only on community signals.",
@@ -1233,6 +1817,23 @@ export class WriterService {
                     "defensive no-user-opinion disclaimer interrupting article flow",
                     "unused list of external opinion sources",
                     "unnecessary safety disclaimer ending",
+                    ...(isCommunityRumorWatch
+                      ? [
+                          "community rumor article drifted into internal implementation or alternative-tool comparison",
+                          "internal implementation terms in a community rumor article",
+                          "English if/then conditional sentences in normal prose",
+                          "GitHub Issues treated as official announcement",
+                          "missing personal judgment in the ending",
+                        ]
+                      : []),
+                    ...(isModelComparisonGuide
+                      ? [
+                          "model comparison article missing the Sonnet default / Opus high failure-cost conclusion",
+                          "model comparison article drifted into internal implementation or automation architecture",
+                          "Opus rumor treated as confirmed without official source",
+                          "English if/then conditional sentences in normal prose",
+                        ]
+                      : []),
                   ],
                   priorityRules: {
                     P0: [
@@ -1319,10 +1920,30 @@ export class WriterService {
     keyword: string;
     sourceContext?: WriterSourceContext | null;
   }): Promise<WriterGenerationResult<SeoPackageResult>> {
+    const articleIntent = classifyArticleIntent({
+      keyword: params.keyword,
+      title: params.post.title,
+      memo: params.post.draft,
+      sourceContext: params.sourceContext,
+    });
+    const isCommunityRumorWatch = articleIntent.primaryIntent === "community_rumor_watch";
+    const isModelComparisonGuide = articleIntent.primaryIntent === "model_comparison_guide";
     const fallback = {
-      metaTitle: `${params.keyword} 실전 가이드`,
-      metaDescription: `${params.keyword}를 빠르게 적용하기 위한 핵심 단계와 체크리스트를 정리합니다.`,
-      tags: [params.keyword, "실무", "가이드"],
+      metaTitle: isModelComparisonGuide
+        ? "Claude Code Opus Sonnet 차이: 모델 선택 기준"
+        : isCommunityRumorWatch
+        ? buildCommunityRumorWatchFallbackTitle(params.sourceContext, params.keyword)
+        : `${params.keyword} 실전 가이드`,
+      metaDescription: isModelComparisonGuide
+        ? "Claude Code에서 Sonnet과 Opus를 작업 기준으로 나눠 쓰는 방법과 Opus 중단설 전 확인할 공식 출처·모델 선택 체크포인트를 정리합니다."
+        : isCommunityRumorWatch
+        ? "Claude Code Opus 제공 중단설을 공식 확인 전 검토하고, 사용자가 지금 확인할 모델 선택·요금제·공식 문서 기준을 정리합니다."
+        : `${params.keyword}를 빠르게 적용하기 위한 핵심 단계와 체크리스트를 정리합니다.`,
+      tags: isModelComparisonGuide
+        ? modelComparisonRumorTags
+        : isCommunityRumorWatch
+          ? communityRumorWatchPreferredTags
+          : [params.keyword, "실무", "가이드"],
       slug: params.keyword.replace(/\s+/g, "-").toLowerCase(),
     };
 
@@ -1347,8 +1968,23 @@ export class WriterService {
                   "For community-signal based articles, prefer 검토형 tags such as Claude Code, Claude Pro, Opus, AI 코딩 도구, 모델 제공 중단, 개발자 요금제, AI 도구 검토 when relevant.",
                   "Do not overuse source-name tags. DCInside or 특이점갤 may appear at most once and only when useful.",
                   "Return 8-10 tags.",
-                  "Include at least 4 search-intent tags, such as 블로그 자동 작성기, ChatGPT API 활용, AI 콘텐츠 파이프라인, 티스토리 글쓰기 자동화.",
-                  "Include at least 3 technical-component tags, such as Next.js API Route, Prisma SQLite, OpenAI-compatible provider, 로컬 LLM.",
+                  ...(isCommunityRumorWatch
+                    ? [
+                        "For community_rumor_watch mode, prioritize tags that a reader would actually search for around the rumor: Claude Code, Claude Pro, Claude Opus, Opus 제공 중단설, Claude Code 이슈, AI 코딩 도구, Anthropic, 개발자 요금제, 모델 제공 정책, AI 도구 루머.",
+                        "Do not use internal implementation terms, app architecture terms, or alternative-tool lists as SEO tags.",
+                        "Do not use Next.js API Route, OpenAI-compatible provider, Tistory Export, WriterService, GenerationLog, provider success E2E, or similar internal terms.",
+                        "Do not make Codex, ChatGPT, Gemini CLI the tag center unless the article is actually about comparing those tools.",
+                      ]
+                    : isModelComparisonGuide
+                      ? [
+                          "For model_comparison_guide with rumor_safety_overlay, prioritize tags: Claude Code, Claude Opus, Claude Sonnet, Opus Sonnet 차이, Claude Code 모델 선택, Opus 중단설, AI 코딩 도구, 코딩 에이전트, 모델 선택 기준, Anthropic.",
+                          "Do not use internal implementation terms or automation tags.",
+                          "Do not use WriterService, GenerationLog, approval guard, oauth-proxy, OpenAI-compatible provider, API Route, Tistory Export, provider success E2E, 자동화, or SEO.",
+                        ]
+                    : [
+                        "Include at least 4 search-intent tags, such as 블로그 자동 작성기, ChatGPT API 활용, AI 콘텐츠 파이프라인, 티스토리 글쓰기 자동화.",
+                        "Include at least 3 technical-component tags, such as Next.js API Route, Prisma SQLite, OpenAI-compatible provider, 로컬 LLM.",
+                      ]),
                   "Reduce internal implementation terms in public SEO tags.",
                   "Do not use internal terms or test names such as WriterService, GenerationLog, provider success E2E, or internal test names as tags.",
                   "Avoid clickbait words such as 무조건, 완벽, 끝판왕, 충격.",
@@ -1369,21 +2005,46 @@ export class WriterService {
                 draft: params.post.draft,
                 sourceContext: params.sourceContext,
                 seoRequirements: {
-                  tagCount: "8-10",
-                  minimumSearchIntentTags: 4,
-                  minimumTechnicalComponentTags: 3,
-                  maxInternalTermTags: 2,
-                  metaDescriptionLength: "120-145 Korean characters, hard maximum 150",
-                  forbiddenTags: ["provider success E2E", "GenerationLog", "WriterService", "AI", "자동화", "SEO"],
-                  preferSpecificTags: true,
-                  reflectLimitations: true,
-                  avoidClickbait: true,
-                  distinguishWritingAutomationFromPublishingAutomation: true,
-                  communitySignalGuidance: {
-                    avoidSourceTagSpam: true,
-                    maxSourceNameTags: 1,
-                    useReviewStyleKeywords: true,
-                  },
+                  articleIntent,
+                  ...(isCommunityRumorWatch
+                    ? buildCommunityRumorWatchSeoRequirements()
+                    : isModelComparisonGuide
+                      ? {
+                          mode: "model_comparison_guide",
+                          overlay: hasRumorSafetyOverlay(articleIntent) ? "rumor_safety_overlay" : null,
+                          tagCount: "8-10",
+                          preferredTags: modelComparisonRumorTags,
+                          forbiddenTags: [
+                            "WriterService",
+                            "GenerationLog",
+                            "approval guard",
+                            "oauth-proxy",
+                            "OpenAI-compatible provider",
+                            "API Route",
+                            "Tistory Export",
+                            "provider success E2E",
+                            "자동화",
+                            "SEO",
+                          ],
+                          metaDescriptionLength: "120-145 Korean characters, hard maximum 150",
+                        }
+                    : {
+                        tagCount: "8-10",
+                        minimumSearchIntentTags: 4,
+                        minimumTechnicalComponentTags: 3,
+                        maxInternalTermTags: 2,
+                        metaDescriptionLength: "120-145 Korean characters, hard maximum 150",
+                        forbiddenTags: ["provider success E2E", "GenerationLog", "WriterService", "AI", "자동화", "SEO"],
+                        preferSpecificTags: true,
+                        reflectLimitations: true,
+                        avoidClickbait: true,
+                        distinguishWritingAutomationFromPublishingAutomation: true,
+                        communitySignalGuidance: {
+                          avoidSourceTagSpam: true,
+                          maxSourceNameTags: 1,
+                          useReviewStyleKeywords: true,
+                        },
+                      }),
                 },
               }),
             },
@@ -1396,7 +2057,11 @@ export class WriterService {
             {
               metaTitle: String(parsed.metaTitle ?? fallback.metaTitle),
               metaDescription: normalizeMetaDescription(parsed.metaDescription ?? fallback.metaDescription),
-              tags: normalizeSeoTags(parsed.tags, fallback.tags),
+              tags: isCommunityRumorWatch
+                ? normalizeCommunityRumorWatchTags(parsed.tags)
+                : isModelComparisonGuide
+                  ? normalizePublicArticleTags(parsed.tags, fallback.tags, articleIntent)
+                : normalizeSeoTags(parsed.tags, fallback.tags),
               slug: String(parsed.slug ?? fallback.slug),
             },
             null,
