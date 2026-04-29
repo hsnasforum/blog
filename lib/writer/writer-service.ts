@@ -82,6 +82,13 @@ type DraftResult = {
   draft: string;
 };
 
+type EditorialDraftResult = {
+  editorialDraft: string;
+  editorialChangeSummary: string;
+};
+
+type EditorialPassDisposition = "used" | "reverted_to_original" | "safe_fallback_used";
+
 type ReviewResult = {
   reviewReport: string;
 };
@@ -153,6 +160,46 @@ function normalizeSeoTags(raw: unknown, fallback: string[]) {
   }
 
   return result.slice(0, 10);
+}
+
+function polishModelComparisonTitle(rawTitle: string) {
+  const compact = rawTitle.replace(/\s+/g, " ").trim();
+  if (
+    !compact ||
+    /확인\s*전\s*확인|공식\s*확인\s*전\s*확인|확인\s*필요\s*확인|대체\s*도구|도구\s*비교/i.test(compact)
+  ) {
+    return "Claude Code Opus Sonnet 차이: Opus 중단설 전에 확인할 작업 기준";
+  }
+
+  return compact.replace(/공식\s*확인\s*전\s*확인해야\s*할\s*점/g, "중단설 전에 확인할 작업 기준");
+}
+
+function buildSafeModelComparisonFallbackDraft(title: string) {
+  return [
+    `# ${polishModelComparisonTitle(title)}`,
+    "",
+    "## 결론: Sonnet은 기본 작업, Opus는 실패 비용이 큰 작업",
+    "큰 코드베이스에서 Claude Code를 쓰다 보면 모델 이름보다 작업의 실패 비용이 먼저 문제가 됩니다. 제 기준은 단순합니다. Sonnet은 빠르게 검증할 수 있는 기본 작업에 쓰고, Opus는 틀렸을 때 되돌리기 비싼 판단에 씁니다.",
+    "이 글은 Opus 중단 여부를 판정하는 글이 아닙니다. 핵심은 Opus와 Sonnet을 어떤 작업 기준으로 나눠 쓸지 정리하는 것입니다. 중단설은 그 기준을 흔들 수 있는 변수라서 뒤쪽에서 따로 다룹니다.",
+    "",
+    "## Opus와 Sonnet을 나누는 핵심 기준 3가지",
+    "먼저 볼 것은 모델 이름이 아니라 실패 비용입니다. 작은 버그 수정처럼 결과를 바로 확인할 수 있는 작업은 Sonnet으로 시작해도 충분합니다. 인증, 세션, 권한이 함께 얽힌 변경처럼 방향을 잘못 잡으면 여러 파일을 다시 뜯어야 하는 작업은 Opus로 먼저 판단을 잡는 편이 낫습니다.",
+    "",
+    "## 작업별 추천 기준",
+    "통화 표시가 특정 조건에서만 깨지는 문제처럼 범위가 좁고 되돌리기 쉬운 일은 Sonnet으로 빠르게 반복합니다. 반대로 메일 발송, 검색, 결제, 이미지 변환처럼 외부 제공자 변경이 운영 흐름에 영향을 주는 일은 Opus로 위험 지점을 먼저 나누고 Sonnet으로 작게 실행하는 방식이 안전합니다.",
+    "",
+    "## Opus 중단설은 모델 선택 기준과 분리해서 봐야 합니다",
+    "커뮤니티나 GitHub Issues에서 비슷한 이야기가 보여도 그것만으로 모델 제공 변경을 확정하기엔 이릅니다. 저는 이런 신호가 나왔을 때 바로 갈아타기보다, 내 계정과 작업 환경에서 실제로 무엇이 보이는지 먼저 보는 편이 맞다고 봅니다.",
+    "",
+    "## 중단설 전에 확인할 체크리스트",
+    "Claude Code의 모델 선택 화면, 계정과 플랜 안내, 공식 문서, 릴리즈 노트, 상태 페이지를 따로 확인합니다. GitHub Issues는 같은 혼란이 있는지 보는 보강 자료로만 두고, 공식 발표와는 구분합니다.",
+    "",
+    "## 추천 워크플로우",
+    "이 기준을 잡고 나면 작업별 선택은 단순해집니다. Opus로 위험과 경계를 잡고, Sonnet으로 작은 단위 구현을 반복한 뒤, 마지막에 Opus로 놓친 영향과 되돌리기 어려운 지점을 다시 봅니다.",
+    "",
+    "## 결론",
+    "제 운영 기준은 결국 하나입니다. Sonnet은 빠르게 확인할 수 있는 작업에 쓰고, Opus는 틀렸을 때 비싼 판단에 씁니다. 모델 이름보다 중요한 것은 작업을 작게 나누고, 실패했을 때 되돌릴 수 있게 만드는 것입니다.",
+  ].join("\n");
 }
 
 function buildStandardDraftRequirements() {
@@ -820,6 +867,150 @@ export class WriterService {
     return rewriteViolations.length === 0 ? rewrittenDraft : params.fallbackDraft;
   }
 
+  private async improveDraftReadability(params: {
+    post: Pick<Post, "id" | "title" | "angle" | "outline">;
+    originalDraft: string;
+    safeFallbackDraft: string;
+    rawTopic: string;
+    keyword: string;
+    blogProfile: BlogProfile;
+    sourceContext: WriterSourceContext | null | undefined;
+    articleIntent: ArticleIntent;
+  }): Promise<EditorialDraftResult> {
+    const sourceContext = params.sourceContext;
+    const sourceMaterial = {
+      communitySignal: sourceContext?.communitySignal,
+      reinforcementSignals: (sourceContext?.reinforcementSignals ?? []).slice(0, 3).map((signal) => ({
+        title: signal.title,
+        url: signal.url,
+        repository: signal.repository,
+        commentCount: signal.commentCount,
+        reactionCount: signal.reactionCount,
+        updatedAt: signal.updatedAt,
+        verificationStatus: signal.verificationStatus,
+      })),
+      officialSources: sourceContext?.officialSources ?? [],
+      verificationStatus: sourceContext?.verificationStatus,
+      riskLevel: sourceContext?.riskLevel,
+      overlays: params.articleIntent.overlays,
+    };
+    const validateDraft = (draft: string) => findPublicArticleDraftViolations(draft, params.articleIntent);
+    const safeFallbackDraft =
+      validateDraft(params.safeFallbackDraft).length === 0
+        ? params.safeFallbackDraft
+        : buildSafeModelComparisonFallbackDraft(params.post.title);
+    const chooseDraft = (
+      editorialDraft: string | null,
+      editorialChangeSummary: string | null,
+      failureReason?: string,
+    ): EditorialDraftResult => {
+      if (editorialDraft) {
+        const editorialViolations = validateDraft(editorialDraft);
+        if (editorialViolations.length === 0) {
+          return {
+            editorialDraft,
+            editorialChangeSummary: `editorialPass=used; ${editorialChangeSummary || "문장 흐름과 문체를 다듬었습니다."}`,
+          };
+        }
+      }
+
+      const originalViolations = validateDraft(params.originalDraft);
+      if (originalViolations.length === 0) {
+        return {
+          editorialDraft: params.originalDraft,
+          editorialChangeSummary: `editorialPass=reverted_to_original${
+            failureReason ? `; reason=${failureReason}` : ""
+          }`,
+        };
+      }
+
+      return {
+        editorialDraft: safeFallbackDraft,
+        editorialChangeSummary: `editorialPass=safe_fallback_used; originalViolations=${originalViolations.join(", ")}`,
+      };
+    };
+    const fallback = chooseDraft(null, null, "provider_error");
+    const validEditorialPasses: EditorialPassDisposition[] = ["used", "reverted_to_original", "safe_fallback_used"];
+    if (!validEditorialPasses.some((status) => fallback.editorialChangeSummary.includes(`editorialPass=${status}`))) {
+      fallback.editorialChangeSummary = "editorialPass=safe_fallback_used";
+    }
+
+    const result = await this.withLog<EditorialDraftResult>({
+      action: "writer_editorial_pass",
+      inputSummary: `post=${params.post.id}, intent=${params.articleIntent.primaryIntent}, keyword=${params.keyword}`,
+      outputSummary: (data) => summarize(data.editorialChangeSummary || data.editorialDraft, 160),
+      onErrorFallback: () => fallback,
+      runner: async () => {
+        const response = await this.complete({
+          temperature: 0.25,
+          responseFormat: "json",
+          messages: [
+            {
+              role: "system",
+              content: [
+                "You are a Korean editorial pass writer. Return only JSON with keys editorialDraft and editorialChangeSummary.",
+                "Do not add new facts, prices, policy claims, model-status claims, official-source claims, source URLs, quotes, or user opinions.",
+                "Preserve source/verification caution and never turn community-only or GitHub Issues material into confirmed fact.",
+                "Keep the existing article intent, title direction, H2 structure, and core conclusion.",
+                "Remove internal implementation context unless the intent is project_devlog.",
+                `Forbidden public-article implementation terms: ${publicArticleForbiddenTerms.join(", ")}.`,
+                "Do not write English if/then conditional prose.",
+                "Improve readability only: stronger opening, smoother transitions, concrete illustrative examples, less audit-like wording, stronger personal operating judgment at the end.",
+                "Do not return SEO metadata, tags, review report, export package, or JSON nested inside the draft.",
+                ...(params.articleIntent.primaryIntent === "model_comparison_guide"
+                  ? [
+                      "For model_comparison_guide with rumor_safety_overlay, edit the piece so it reads like a blog article, not a validation memo.",
+                      "Start from a real usage scene, for example a large codebase where model choice becomes a problem only after the work gets risky.",
+                      "Within the first two paragraphs, state the conclusion: Sonnet은 기본 작업용, Opus는 실패 비용이 큰 작업용.",
+                      "After that, add 2-3 natural sentences about scope: this covers Opus/Sonnet selection criteria, splitting work in large codebases, and what to check when a rumor appears. It does not claim Opus shutdown or current pricing/policy as fact.",
+                      "Add transition sentences between sections, such as 먼저 볼 것은 모델 이름이 아니라 실패 비용입니다, 이 기준을 잡고 나면 작업별 선택은 단순해집니다, or 중단설은 별도로 확인해야 합니다.",
+                      "Add concrete illustrative work scenes without claiming they happened: currency-format display bug, tangled auth/session/permission refactor, and external provider changes such as mail/search/payment/image conversion.",
+                      "Add at least one author-view sentence in each major section, such as 저라면 이런 작업은 Sonnet으로 먼저 시작합니다 or 저는 모델 선택보다 작업 단위 분리가 먼저라고 봅니다.",
+                      "Limit the exact phrase 확인 필요 to at most two uses. Prefer natural wording such as 아직 그렇게 보기엔 이릅니다, 결론을 서두르지 않는 편이 낫다고 봅니다, or 내 계정과 작업 환경에서 확인한 뒤 판단하는 편이 안전합니다.",
+                      "Close with a personal operating principle, not a repeated checklist.",
+                    ]
+                  : []),
+              ].join(" "),
+            },
+            {
+              role: "user",
+              content: JSON.stringify({
+                title: params.post.title,
+                angle: params.post.angle,
+                rawTopic: params.rawTopic,
+                keyword: params.keyword,
+                outline: params.post.outline,
+                originalDraft: params.originalDraft,
+                articleIntent: params.articleIntent,
+                sourceMaterial,
+                blogProfile: {
+                  tone: params.blogProfile.defaultTone,
+                  targetAudience: params.blogProfile.targetAudience,
+                  forbiddenPhrases: params.blogProfile.forbiddenPhrases,
+                },
+                editorialRules: {
+                  noNewFacts: true,
+                  preserveVerificationStatus: true,
+                  keepH2Structure: true,
+                  strengthenOpeningAndTransitions: true,
+                  improveExamplesWithoutInventingExperience: true,
+                  endWithPersonalOperatingPrinciple: true,
+                },
+              }),
+            },
+          ],
+        });
+        const parsed = safeJsonParse<Partial<EditorialDraftResult>>(response, fallback);
+        const editorialDraft = parsed.editorialDraft?.trim() || null;
+        const editorialChangeSummary = parsed.editorialChangeSummary?.trim() || null;
+
+        return chooseDraft(editorialDraft, editorialChangeSummary, "editorial_validation_failed");
+      },
+    });
+
+    return result.data;
+  }
+
   async generateKeywordCandidates(params: {
     rawTopic: string;
     memo?: string | null;
@@ -1154,7 +1345,7 @@ export class WriterService {
         ? buildCommunityRumorWatchAngle(params.keyword)
         : `${params.keyword}를 ${params.blogProfile.targetAudience} 관점에서 바로 실행 가능한 단계형 가이드로 정리`,
       title: isModelComparisonGuide
-        ? "Claude Code Opus Sonnet 차이: Opus 중단설 전에 볼 작업 기준"
+        ? "Claude Code Opus Sonnet 차이: Opus 중단설 전에 확인할 작업 기준"
         : isCommunityRumorWatch
         ? buildCommunityRumorWatchFallbackTitle(params.sourceContext, params.keyword)
         : `${params.keyword} 실전 가이드: 지금 적용 가능한 체크포인트`,
@@ -1165,9 +1356,9 @@ export class WriterService {
         : "블로그 타깃 독자의 실행 의도를 우선하는 방향입니다.",
       titleCandidates: isModelComparisonGuide
         ? [
-            "Claude Code Opus Sonnet 차이: Opus 중단설 전에 볼 작업 기준",
+            "Claude Code Opus Sonnet 차이: Opus 중단설 전에 확인할 작업 기준",
+            "Claude Code Opus Sonnet 선택 기준: Opus 중단설 전에 볼 것들",
             "Claude Code에서 Opus와 Sonnet을 나눠 쓰는 기준",
-            "Claude Code Opus 중단설 전에 확인할 Sonnet 선택 기준",
           ]
         : isCommunityRumorWatch
         ? communityRumorWatchTitleExamples
@@ -1206,6 +1397,9 @@ export class WriterService {
                     ? [
                         "For model_comparison_guide mode, the title must include Claude Code, Opus, Sonnet, and 차이 or 선택 기준.",
                         "The title center must be Opus/Sonnet task selection, with Opus 중단설 only as a safety/check context.",
+                        "Prefer this exact title when it fits: Claude Code Opus Sonnet 차이: Opus 중단설 전에 확인할 작업 기준.",
+                        "Allowed alternatives: Claude Code Opus Sonnet 선택 기준: Opus 중단설 전에 볼 것들 / Claude Code에서 Opus와 Sonnet을 언제 나눠 써야 할까 / Claude Code Opus와 Sonnet 차이, 작업별 선택 기준 정리.",
+                        "Do not use awkward repeated confirmation phrases such as 확인 전 확인해야 할 점, 공식 확인 전 확인, or 확인 필요 확인.",
                         "Avoid internal implementation or automation framing.",
                       ]
                     : []),
@@ -1242,10 +1436,17 @@ export class WriterService {
         const parsed = safeJsonParse<Partial<AngleResult>>(response, fallback);
         return {
           angle: parsed.angle?.trim() || fallback.angle,
-          title: parsed.title?.trim() || fallback.title,
+          title: isModelComparisonGuide
+            ? polishModelComparisonTitle(parsed.title?.trim() || fallback.title)
+            : parsed.title?.trim() || fallback.title,
           reason: parsed.reason?.trim() || fallback.reason,
           titleCandidates:
-            parsed.titleCandidates?.map((item) => item.trim()).filter(Boolean).slice(0, 3) ??
+            (isModelComparisonGuide
+              ? (parsed.titleCandidates ?? fallback.titleCandidates)
+                  .map((item) => polishModelComparisonTitle(item))
+                  .filter(Boolean)
+                  .slice(0, 3)
+              : parsed.titleCandidates?.map((item) => item.trim()).filter(Boolean).slice(0, 3)) ??
             fallback.titleCandidates,
         };
       },
@@ -1595,16 +1796,28 @@ export class WriterService {
           };
         }
         if (isModelComparisonGuide) {
+          const draft = await this.generateModelComparisonGuideDraft({
+            post: params.post,
+            rawTopic: params.rawTopic,
+            keyword: params.keyword,
+            blogProfile: params.blogProfile,
+            sourceContext: params.sourceContext,
+            articleIntent,
+            fallbackDraft,
+          });
+          const editorial = await this.improveDraftReadability({
+            post: params.post,
+            originalDraft: draft,
+            safeFallbackDraft: fallbackDraft,
+            rawTopic: params.rawTopic,
+            keyword: params.keyword,
+            blogProfile: params.blogProfile,
+            sourceContext: params.sourceContext,
+            articleIntent,
+          });
+
           return {
-            draft: await this.generateModelComparisonGuideDraft({
-              post: params.post,
-              rawTopic: params.rawTopic,
-              keyword: params.keyword,
-              blogProfile: params.blogProfile,
-              sourceContext: params.sourceContext,
-              articleIntent,
-              fallbackDraft,
-            }),
+            draft: editorial.editorialDraft,
           };
         }
         const response = await this.complete({
