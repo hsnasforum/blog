@@ -77,6 +77,9 @@ const modelComparisonConclusionPattern =
   /Sonnet은\s*기본\s*작업|Sonnet.*기본.*작업|Opus는\s*실패\s*비용|Opus.*실패\s*비용/i;
 const firstSectionConclusionPattern =
   /^#{1,2}\s*결론|^##\s*결론|Sonnet은\s*기본\s*작업[\s\S]{0,400}Opus는\s*실패\s*비용/i;
+const secondSectionCriteriaPattern = /Opus|Sonnet|오푸스|소넷|기준|핵심|나누/i;
+const secondSectionRumorDriftPattern = /중단|퇴역|공식\s*확인/i;
+const rumorSectionTitlePattern = /중단설|중단|안\s*보인|공식\s*확인|계정|플랜|모델\s*선택\s*화면|UI\s*표시|일시\s*장애/i;
 const bodyHtmlMixedMetadataPattern = /메타\s*설명\s*:|태그\s*:|추천\s*태그|SEO\s*title|metaDescription|reviewReport|검수\s*리포트/i;
 const escapedTistoryTagPattern = /&lt;(p|h2|h3)\s+data-ke-size/i;
 const defensiveAuditPhrasePattern =
@@ -321,6 +324,13 @@ function hasGitHubOfficialOverclaim(draft) {
   });
 }
 
+function extractH2Titles(markdown) {
+  return markdown
+    .split(/\r?\n/)
+    .map((line) => line.match(/^##\s+(.+?)\s*$/)?.[1]?.replace(/^\d+[.)]\s*/, "").trim())
+    .filter(Boolean);
+}
+
 function extractPublishDecision(reviewReport) {
   const match = reviewReport.match(/발행\s*판단([\s\S]*?)(?:\n#{1,6}\s|\n\d+\.\s|\nP0|\n수정\s*우선순위|$)/);
   return (match?.[1] ?? reviewReport.slice(0, 600)).trim();
@@ -530,6 +540,9 @@ async function runE2E() {
   const reviewReport = String(finalPost.reviewReport ?? "");
   const metaDescription = String(seoPackage.metaDescription ?? "");
   const publishDecision = extractPublishDecision(reviewReport);
+  const h2Titles = extractH2Titles(draft);
+  const secondSectionTitle = h2Titles[1] ?? "";
+  const rumorSectionIndex = h2Titles.findIndex((sectionTitle, index) => index > 0 && rumorSectionTitlePattern.test(sectionTitle));
   const sourceTagCount = tags.filter((tag) => sourceTagPattern.test(tag)).length;
   const searchIntentTagCount = tags.filter((tag) => searchIntentTagPattern.test(tag)).length;
   const cautionCount = countMatches(draftCautionPatterns, draft);
@@ -546,6 +559,21 @@ async function runE2E() {
     "draft should lead with Sonnet default / Opus high failure-cost conclusion",
     { draftPreview: draft.slice(0, 1200) },
   );
+  assertStep(h2Titles.length >= 6, "draft should keep the requested model-comparison outline depth", {
+    h2Titles,
+  });
+  assertStep(secondSectionCriteriaPattern.test(secondSectionTitle), "second section should be Opus/Sonnet selection criteria", {
+    secondSectionTitle,
+    h2Titles,
+  });
+  assertStep(!secondSectionRumorDriftPattern.test(secondSectionTitle), "second section should not jump into shutdown verification", {
+    secondSectionTitle,
+    h2Titles,
+  });
+  assertStep(rumorSectionIndex >= 3, "rumor/shutdown section should appear only after the early model-selection sections", {
+    rumorSectionNumber: rumorSectionIndex + 1,
+    h2Titles,
+  });
   assertStep(cautionCount >= 2, "draft lacks community-signal caution language", {
     cautionCount,
     matched: draftCautionPatterns.filter((pattern) => pattern.test(draft)).map((pattern) => pattern.source),
@@ -597,7 +625,7 @@ async function runE2E() {
     { reviewPreview: reviewReport.slice(0, 1200) },
   );
   assertStep(
-    /커뮤니티\s*신호.*사실|커뮤니티\s*신호.*단정|사실처럼\s*단정|단정하지|루머를\s*확정하지|community_only|공식\s*확인\s*필요/.test(
+    /커뮤니티\s*신호.*사실|커뮤니티\s*신호.*단정|사실처럼\s*단정|확정\s*사실처럼\s*쓰지|커뮤니티\s*신호와\s*공식\s*확인.*분리|단정하지|루머를\s*확정하지|community_only|공식\s*확인\s*필요/.test(
       reviewReport,
     ),
     "reviewReport does not warn against factual assertion",
@@ -704,6 +732,8 @@ async function runE2E() {
       draftCautionMatchCount: cautionCount,
       draftInternalTermsRemoved: true,
       draftPlainIfThenRemoved: true,
+      secondSectionTitle,
+      rumorSectionNumber: rumorSectionIndex + 1,
       personalJudgmentIncluded: true,
       draftBadAssertion: false,
       reviewDecision: publishDecision.slice(0, 180),
