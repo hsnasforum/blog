@@ -16,6 +16,8 @@
     "test:e2e:community-article": "node scripts/e2e/community-article-quality.mjs",
     "test:e2e:github-issues-boost": "node scripts/e2e/github-issues-boost.mjs",
     "test:e2e:official-verification": "node scripts/e2e/official-verification.mjs",
+    "test:e2e:auto-workflow": "DATABASE_URL=file:./auto-workflow-e2e.db E2E_CLEANUP_DB=1 TREND_COLLECTOR_MODE=mock COMMUNITY_COLLECTOR_MODE=mock GITHUB_ISSUES_COLLECTOR_MODE=mock WRITER_PROVIDER=oauth-proxy OPENAI_BASE_URL=http://127.0.0.1:10531/v1 OPENAI_API_KEY=dummy-for-local-proxy WRITER_MODEL=gpt-5.5 WRITER_REASONING_EFFORT=xhigh node scripts/e2e/auto-workflow.mjs",
+    "test:e2e:auto-workflow-progress": "DATABASE_URL=file:./auto-workflow-progress-e2e.db E2E_CLEANUP_DB=1 TREND_COLLECTOR_MODE=mock COMMUNITY_COLLECTOR_MODE=mock GITHUB_ISSUES_COLLECTOR_MODE=mock WRITER_PROVIDER=oauth-proxy OPENAI_BASE_URL=http://127.0.0.1:10531/v1 OPENAI_API_KEY=dummy-for-local-proxy WRITER_MODEL=gpt-5.5 WRITER_REASONING_EFFORT=xhigh node scripts/e2e/auto-workflow-progress.mjs",
     "test:e2e:kospi-opinion": "node scripts/e2e/kospi-user-opinion-regression.mjs",
     "test:trend:collector": "node scripts/e2e/trend-collector-smoke.mjs",
     "test:community:radar": "node scripts/e2e/community-radar-smoke.mjs",

@@ -174,6 +174,31 @@ reasoning 모델 설정:
 - `/topics/[id]/trends`
 - `/posts/[id]/workflow`
 
+## Auto Workflow 진행률 운영 메모
+Auto Scout와 Auto Draft는 자동 발행이나 자동 승인이 아니라, 승인 전 단계까지의 반복 작업을 묶어 실행하는 보조 흐름입니다.
+
+현재 구조:
+- 클라이언트가 먼저 `WorkflowRun`을 만들고 `runId`를 받습니다.
+- 이후 Auto Scout 또는 Auto Draft 서버 요청이 실행됩니다.
+- 서버 요청 내부에서 단계별로 `WorkflowRunStep` 상태와 진행률을 DB에 저장합니다.
+- UI는 `GET /api/workflow-runs/[runId]`를 polling해 진행률, 현재 단계, warning, 실패 단계를 보여줍니다.
+- 새로고침 후에도 같은 `runId`로 마지막 실행 상태를 복구할 수 있습니다.
+- 주요 생성 단계는 `WorkflowRunStep.generationLogId`로 `GenerationLog`와 연결해 사후 추적할 수 있습니다.
+
+운영 기준:
+- `partial`은 실패가 아니라 확인할 warning이 있는 상태입니다.
+- GitHub Issues 결과 없음, 공식 출처 없음, 일부 collector 실패, fallback 사용, `community_only`로 인한 `write_now` 차단은 warning으로 봅니다.
+- 후보 생성 실패, draft 생성 실패, reviewReport 생성 실패, DB 저장 실패, export 준비 실패는 failed로 봅니다.
+- Auto Draft가 100% 완료되어도 `workflowStep=review`에서 멈추며, `approvedAt`은 자동 설정하지 않습니다.
+
+장기 개선 TODO:
+- 긴 서버 요청을 더 잘게 나눈 클라이언트 주도 단계별 API 실행
+- 실패 단계만 다시 실행하는 단계별 재시도 API
+- provider 호출 중 cancel은 즉시 중단이 아니라 다음 단계 진행 차단으로 처리
+- Auto Scout / Auto Draft / Column Ideas 공통 workflow runner 추상화
+- 배포 환경의 장시간 요청 timeout 대응
+- 공통 dev server 1개와 순차 E2E 구조 유지
+
 ## REFUSE HUB BlogProfile 프리셋
 `/settings/blog-profile` 화면에는 `REFUSE HUB 프리셋 적용` 버튼이 있습니다.
 

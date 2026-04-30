@@ -178,28 +178,189 @@ function buildSafeModelComparisonFallbackDraft(title: string) {
   return [
     `# ${polishModelComparisonTitle(title)}`,
     "",
-    "## 결론: Sonnet은 기본 작업, Opus는 실패 비용이 큰 작업",
-    "큰 코드베이스에서 Claude Code를 쓰다 보면 모델 이름보다 작업의 실패 비용이 먼저 문제가 됩니다. 제 기준은 단순합니다. Sonnet은 빠르게 검증할 수 있는 기본 작업에 쓰고, Opus는 틀렸을 때 되돌리기 비싼 판단에 씁니다.",
-    "이 글은 Opus 중단 여부를 판정하는 글이 아닙니다. 핵심은 Opus와 Sonnet을 어떤 작업 기준으로 나눠 쓸지 정리하는 것입니다. 중단설은 그 기준을 흔들 수 있는 변수라서 뒤쪽에서 따로 다룹니다.",
+    "큰 코드베이스에서 Claude Code를 쓰다 보면 모델 선택은 생각보다 늦게 문제가 됩니다. 처음에는 어떤 모델이든 비슷해 보이다가, 인증 흐름이나 리팩터링처럼 되돌리기 어려운 작업에 들어가면 그때부터 선택 기준이 필요해집니다.",
+    "결론은 단순합니다. Sonnet은 빠르게 확인할 수 있는 기본 작업에 쓰고, Opus는 실패 비용이 큰 판단에 쓰는 편이 덜 흔들립니다.",
+    "여기서는 Opus 중단 여부를 판정하지 않습니다. Opus와 Sonnet을 어떤 작업 기준으로 나눌지, 중단설 같은 이야기가 나와도 무엇을 먼저 확인할지, 작업을 어떻게 작게 쪼갤지를 정리합니다.",
+    "",
+    "> 핵심 요약: Sonnet은 빠르게 검증할 수 있는 기본 작업에 적합합니다.",
+    "> Opus는 설계 판단, 복잡한 디버깅, 되돌리기 어려운 변경처럼 실패 비용이 큰 작업에 쓰는 편이 좋습니다.",
+    "> Opus 중단설은 모델 선택 기준과 분리해서 보고, 먼저 내 계정과 작업 환경에서 확인하는 쪽이 낫습니다.",
+    "",
+    "## 모델 이름보다 먼저 봐야 할 것은 실패 비용입니다",
+    "모델을 고를 때 먼저 볼 것은 이름이나 체감 성능이 아니라 틀렸을 때 얼마나 비싼가입니다. 작은 수정은 잘못돼도 테스트나 리뷰에서 금방 되돌릴 수 있지만, 설계 방향을 잘못 잡은 리팩터링은 여러 파일과 작업 흐름을 함께 흔듭니다.",
+    "이 기준을 잡고 나면 Sonnet과 Opus의 역할도 덜 헷갈립니다. Sonnet은 빠르게 확인하고 고칠 수 있는 작업의 기본값에 가깝고, Opus는 방향을 잘못 잡았을 때 손실이 큰 판단 구간에 쓰는 편이 안정적입니다.",
     "",
     "## Opus와 Sonnet을 나누는 핵심 기준 3가지",
-    "먼저 볼 것은 모델 이름이 아니라 실패 비용입니다. 작은 버그 수정처럼 결과를 바로 확인할 수 있는 작업은 Sonnet으로 시작해도 충분합니다. 인증, 세션, 권한이 함께 얽힌 변경처럼 방향을 잘못 잡으면 여러 파일을 다시 뜯어야 하는 작업은 Opus로 먼저 판단을 잡는 편이 낫습니다.",
+    "먼저 볼 것은 모델 이름이 아니라 실패 비용입니다. 작은 버그 수정처럼 결과를 바로 확인할 수 있는 작업은 Sonnet으로 시작해도 충분합니다. 반대로 인증, 세션, 권한이 함께 얽힌 변경처럼 방향을 잘못 잡으면 여러 파일을 다시 뜯어야 하는 작업은 Opus로 먼저 판단을 잡는 편이 낫습니다.",
+    "검증 가능성도 중요합니다. 테스트가 있고 영향 범위가 좁으면 빠른 반복이 더 가치 있습니다. 설계 판단이 섞이고 되돌리기 어려운 변경이라면 모델 속도보다 잘못된 방향으로 가는 비용을 먼저 보는 편이 안전합니다.",
+    "",
+    "| 항목 | Sonnet | Opus |",
+    "| --- | --- | --- |",
+    "| 적합한 작업 | 범위가 좁고 바로 검증 가능한 수정 | 설계 판단과 복잡한 원인 분석이 필요한 작업 |",
+    "| 실패 비용 | 잘못돼도 되돌리기 쉬운 편 | 방향을 틀리면 여러 흐름을 다시 잡아야 함 |",
+    "| 검증 방식 | 테스트, diff, 작은 리뷰로 빠르게 확인 | 영향 범위와 리스크를 먼저 정리한 뒤 진행 |",
+    "| 추천 사용 시점 | 버그 수정, 작은 리팩터링, 문서 정리 | 인증·권한·세션처럼 얽힌 변경, 대형 리팩터링 |",
+    "| 주의할 점 | 복잡한 설계를 한 번에 맡기지 않기 | 모든 작업에 상시 사용하기보다 필요한 구간에 집중 |",
     "",
     "## 작업별 추천 기준",
-    "통화 표시가 특정 조건에서만 깨지는 문제처럼 범위가 좁고 되돌리기 쉬운 일은 Sonnet으로 빠르게 반복합니다. 반대로 메일 발송, 검색, 결제, 이미지 변환처럼 외부 제공자 변경이 운영 흐름에 영향을 주는 일은 Opus로 위험 지점을 먼저 나누고 Sonnet으로 작게 실행하는 방식이 안전합니다.",
+    "상황: 통화 포맷 표시가 특정 화면에서만 깨집니다. 판단: 관련 파일이 좁고 테스트가 있다면 Sonnet으로 시작해도 됩니다. 행동: 포맷 함수와 테스트 파일만 보고 최소 수정안을 제안해 달라고 요청하는 쪽이 좋습니다.",
+    "반대로 인증 흐름, 세션 처리, 권한 체크가 함께 얽힌 변경은 이야기가 달라집니다. 이 정도로 영향 범위가 커지면 Opus로 먼저 위험 지점과 작업 경계를 나누고, Sonnet으로 작은 단위 구현을 반복하는 방식이 더 안정적입니다.",
     "",
     "## Opus 중단설은 모델 선택 기준과 분리해서 봐야 합니다",
-    "커뮤니티나 GitHub Issues에서 비슷한 이야기가 보여도 그것만으로 모델 제공 변경을 확정하기엔 이릅니다. 저는 이런 신호가 나왔을 때 바로 갈아타기보다, 내 계정과 작업 환경에서 실제로 무엇이 보이는지 먼저 보는 편이 맞다고 봅니다.",
+    "Claude Code를 큰 코드베이스의 메인 코딩 도구로 쓰고 있었다면 Opus 이야기가 그냥 루머처럼만 들리지는 않습니다. 특히 큰 리팩터링이나 원인 분석을 Opus에 맡겨 왔다면, 모델 선택지가 바뀐다는 말만으로도 작업 방식 전체를 다시 생각하게 됩니다.",
+    "다만 커뮤니티나 GitHub Issues에서 비슷한 이야기가 보여도 그것만으로 모델 제공 변경을 확정하기엔 이릅니다. 이런 신호가 나왔을 때 바로 갈아타기보다, 내가 실제로 어느 작업에서 Opus에 기대고 있었는지부터 보는 편이 낫습니다.",
     "",
     "## 중단설 전에 확인할 체크리스트",
-    "Claude Code의 모델 선택 화면, 계정과 플랜 안내, 공식 문서, 릴리즈 노트, 상태 페이지를 따로 확인합니다. GitHub Issues는 같은 혼란이 있는지 보는 보강 자료로만 두고, 공식 발표와는 구분합니다.",
+    "이 단계에서는 확인할 곳을 좁히는 것이 중요합니다. Claude Code의 모델 선택 화면, 계정과 플랜 안내, 공식 문서, 릴리즈 노트, 상태 페이지를 따로 봅니다. GitHub Issues는 같은 혼란이 있는지 보는 보강 자료로만 두고, 공식 발표와는 구분합니다.",
     "",
     "## 추천 워크플로우",
     "이 기준을 잡고 나면 작업별 선택은 단순해집니다. Opus로 위험과 경계를 잡고, Sonnet으로 작은 단위 구현을 반복한 뒤, 마지막에 Opus로 놓친 영향과 되돌리기 어려운 지점을 다시 봅니다.",
     "",
-    "## 결론",
-    "제 운영 기준은 결국 하나입니다. Sonnet은 빠르게 확인할 수 있는 작업에 쓰고, Opus는 틀렸을 때 비싼 판단에 씁니다. 모델 이름보다 중요한 것은 작업을 작게 나누고, 실패했을 때 되돌릴 수 있게 만드는 것입니다.",
+    "## 마무리: 모델보다 작업 단위가 먼저입니다",
+    "운영 기준은 결국 하나입니다. Sonnet은 빠르게 확인할 수 있는 작업에 쓰고, Opus는 틀렸을 때 비싼 판단에 씁니다. 모델 이름보다 중요한 것은 작업을 작게 나누고, 실패했을 때 되돌릴 수 있게 만드는 것입니다.",
   ].join("\n");
+}
+
+function polishModelComparisonMicrocopy(draft: string) {
+  let failureCostCount = 0;
+  const failureCostAlternatives = ["복구 부담", "되돌리는 데 드는 시간", "재작업 비용"];
+
+  return draft
+    .replace(/\bplan guide\b/gi, "공식 문서/요금제 안내")
+    .replace(/^(\s*[-*]\s*)\[\s\]\s+/gm, "$1□ ")
+    .replace(/^\s*\[\s\]\s+/gm, "- □ ")
+    .replace(/실패\s*비용/g, (match) => {
+      failureCostCount += 1;
+      if (failureCostCount <= 6) return match;
+      return failureCostAlternatives[(failureCostCount - 7) % failureCostAlternatives.length];
+    });
+}
+
+const editorialFirstPersonPattern = /제\s*기준|저는|개인적으로는/g;
+const editorialRumorEmotionPattern =
+  /불안|흔들|민감|메인\s*코딩\s*도구|의존|작업\s*방식|큰\s*리팩터링|원인\s*분석|그냥\s*루머처럼만\s*들리지는/i;
+const editorialRumorSectionPattern =
+  /중단설|중단|안\s*보인|공식\s*확인|계정|플랜|모델\s*선택\s*화면|UI\s*표시|일시\s*장애/i;
+const editorialSituationJudgmentActionPattern =
+  /(상황[\s\S]{0,500}판단[\s\S]{0,500}행동)|(통화|금액\s*표시|인증|세션|권한|리팩터링)[\s\S]{0,500}(Sonnet|Opus|소넷|오푸스)[\s\S]{0,500}(요청|제안|물어보|맡기|수정안)/i;
+const editorialOperatingPhilosophyPattern =
+  /모델\s*이름보다\s*작업\s*단위|작업을\s*작게\s*나누|되돌릴\s*수\s*있|실패했을\s*때\s*되돌|빠르게\s*확인할\s*수\s*있는\s*작업|실패\s*비용이\s*큰\s*판단/i;
+const modelComparisonSummaryBoxPattern = /^>\s*(?:\*\*)?핵심\s*요약/m;
+const modelComparisonTablePattern = /\|\s*항목\s*\|\s*Sonnet\s*\|\s*Opus\s*\|/i;
+const modelComparisonFinalHeadingPattern = /마무리|정리/i;
+const modelComparisonEarlyConclusionHeadingPattern = /결론/i;
+const modelComparisonH2Sections = [
+  "모델 이름보다 먼저 봐야 할 것은 실패 비용입니다",
+  "Opus와 Sonnet을 나누는 핵심 기준 3가지",
+  "작업별 추천 기준",
+  "Opus 중단설은 모델 선택 기준과 분리해서 봐야 합니다",
+  "중단설 전에 확인할 체크리스트",
+  "추천 워크플로우",
+  "마무리: 모델보다 작업 단위가 먼저입니다",
+];
+
+function countPatternOccurrences(text: string, pattern: RegExp) {
+  const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
+  return Array.from(text.matchAll(new RegExp(pattern.source, flags))).length;
+}
+
+function extractMarkdownH2Sections(markdown: string) {
+  const sections: Array<{ title: string; body: string }> = [];
+  let current: { title: string; body: string } | null = null;
+
+  for (const line of markdown.split(/\r?\n/)) {
+    const h2Match = line.match(/^##\s+(.+?)\s*$/);
+    if (h2Match) {
+      if (current) sections.push(current);
+      current = {
+        title: h2Match[1].replace(/^\d+[.)]\s*/, "").trim(),
+        body: "",
+      };
+      continue;
+    }
+
+    if (current) {
+      current.body += `${line}\n`;
+    }
+  }
+
+  if (current) sections.push(current);
+  return sections;
+}
+
+function countMarkdownListBlocks(markdown: string) {
+  let blocks = 0;
+  let inList = false;
+
+  for (const line of markdown.split(/\r?\n/)) {
+    const isListLine = /^\s*(?:[-*]|\d+[.)])\s+/.test(line);
+    if (isListLine && !inList) {
+      blocks += 1;
+      inList = true;
+      continue;
+    }
+
+    if (!isListLine && line.trim()) {
+      inList = false;
+    }
+  }
+
+  return blocks;
+}
+
+function findEditorialReadabilityIssues(draft: string, intent: ArticleIntent) {
+  if (intent.primaryIntent !== "model_comparison_guide" || !hasRumorSafetyOverlay(intent)) return [];
+
+  const issues: string[] = [];
+  const sections = extractMarkdownH2Sections(draft);
+  const firstSection = sections[0];
+  const finalSection = sections[sections.length - 1];
+  const conclusionHeadingCount = sections.filter((section) => modelComparisonEarlyConclusionHeadingPattern.test(section.title)).length;
+
+  if (conclusionHeadingCount > 1) {
+    issues.push(`too many conclusion H2 headings (${conclusionHeadingCount})`);
+  }
+
+  if (firstSection && modelComparisonEarlyConclusionHeadingPattern.test(firstSection.title)) {
+    issues.push("first H2 should not be a conclusion heading");
+  }
+
+  if (!modelComparisonSummaryBoxPattern.test(draft)) {
+    issues.push("missing top summary blockquote");
+  }
+
+  if (!modelComparisonTablePattern.test(draft)) {
+    issues.push("missing Sonnet/Opus comparison table");
+  }
+
+  if (!finalSection || !modelComparisonFinalHeadingPattern.test(finalSection.title)) {
+    issues.push("final H2 should be a 마무리 or 정리 section");
+  }
+
+  const firstPersonCount = countPatternOccurrences(draft, editorialFirstPersonPattern);
+  if (firstPersonCount > 4) {
+    issues.push(`first-person judgment overuse (${firstPersonCount})`);
+  }
+
+  const overloadedSections = sections.filter((section) => countMarkdownListBlocks(section.body) > 2);
+  if (overloadedSections.length > 0) {
+    issues.push(`list density too high (${overloadedSections.map((section) => section.title).join(" / ")})`);
+  }
+
+  const rumorSection = sections.find((section, index) => index > 0 && editorialRumorSectionPattern.test(section.title));
+  if (!rumorSection || !editorialRumorEmotionPattern.test(rumorSection.body)) {
+    issues.push("rumor section lacks reader emotional context");
+  }
+
+  if (!editorialSituationJudgmentActionPattern.test(draft)) {
+    issues.push("missing situation-judgment-action example");
+  }
+
+  if (!editorialOperatingPhilosophyPattern.test(draft.slice(-2200))) {
+    issues.push("ending lacks operating philosophy");
+  }
+
+  return issues;
 }
 
 function buildStandardDraftRequirements() {
@@ -756,16 +917,16 @@ export class WriterService {
           "Return markdown article body only. Do not return SEO metadata, tags, review report, JSON, or export package.",
           "This mode is a hard override. Do not use internal project implementation examples.",
           "The article must answer the reader's practical question: when should Claude Code users choose Sonnet, and when is Opus worth using?",
-          "Start with the conclusion: Sonnet은 기본 작업용, Opus는 실패 비용이 큰 작업용.",
+          "Start with a short practical answer: Sonnet은 기본 작업용, Opus는 실패 비용이 큰 작업용.",
           "Use exactly these H2 sections:",
-          "1. 결론: Sonnet은 기본 작업, Opus는 실패 비용이 큰 작업",
-          "2. Opus와 Sonnet을 나누는 핵심 기준 3가지",
-          "3. 작업별 추천 기준",
-          "4. Opus 중단설은 모델 선택 기준과 분리해서 봐야 합니다",
-          "5. 중단설 전에 확인할 체크리스트",
-          "6. 추천 워크플로우",
-          "7. 결론",
+          ...modelComparisonH2Sections.map((section, index) => `${index + 1}. ${section}`),
+          "Do not use the word 결론 in the first H2. The final section should be 마무리 or 정리, not another generic 결론.",
           "Immediately after the opening conclusion, add 2-3 Korean sentences that define the article scope: this is not judging whether Opus is discontinued, the core is Opus/Sonnet task criteria, and the rumor is handled later as a variable.",
+          "After the introduction, add a short Markdown blockquote summary box beginning with '> 핵심 요약:' and keep it to three lines. This is a reading-ahead summary, not the final conclusion.",
+          "Use one Markdown comparison table for Sonnet/Opus selection criteria. The table should have columns 항목, Sonnet, Opus and rows such as 적합한 작업, 실패 비용, 검증 방식, 추천 사용 시점, 주의할 점.",
+          "Do not write the English phrase plan guide. Use 자연스러운 한국어 such as 공식 문서/요금제 안내.",
+          "Do not use Markdown task checkboxes like [ ]. For checklist items, use normal bullet lists or the □ symbol.",
+          "Do not repeat the exact Korean phrase 실패 비용 too often. After the core framing, vary it naturally with 복구 부담, 되돌리는 데 드는 시간, 재작업 비용.",
           "Section 2 must not discuss shutdown rumors, retirement, official confirmation, or model-ID deprecation. It must explain selection criteria: failure cost, verifiability, iteration speed, work scope, reversibility, and whether architectural judgment is needed.",
           "Handle rumor/shutdown material only from section 4 onward, as a side context that should not interrupt the Opus/Sonnet selection flow.",
           "Do not write defensive audit phrases like '현재 이 글에서 공식 자료를 근거로', '단정할 수는 없습니다', '현재 입력 기준', or '공식 확인된 자료는 없습니다'.",
@@ -777,8 +938,10 @@ export class WriterService {
           "Do not write English if/then conditional sentences. Use natural Korean prose.",
           `Never include these internal implementation terms: ${bannedTerms}.`,
           "Keep alternatives like Codex, ChatGPT, or Gemini CLI secondary. The center is Opus/Sonnet task selection.",
-          "Every H2 section must include at least one author-view sentence such as 제 기준은 단순합니다, 저는 실패 비용을 먼저 봅니다, or 개인적으로는 막히는 지점에만 Opus를 쓰는 방식이 낫다고 봅니다.",
+          "Include author-view sentences naturally across the article, but do not repeat exact openings such as 제 기준, 저는, 개인적으로는 more than four times total.",
           "Include concrete density: Opus/Sonnet core 기준, failure-cost 기준, task examples, Opus → Sonnet → Opus workflow, model selector/check settings, cost/speed/verifiability viewpoint, and a checklist for checking in one's own environment.",
+          "Avoid manual-like list density. No H2 section may contain more than two list blocks. Prefer the comparison table for model criteria and keep checklist-style lists in the later verification section.",
+          "For at least one example, use a situation -> judgment -> action flow in natural Korean prose.",
           "End with a practical personal judgment about checking one's own account/model selector and not overreacting before official confirmation.",
         ].join(" "),
       },
@@ -803,6 +966,11 @@ export class WriterService {
           ],
           requiredContent: [
             "opening scope note: this article is about Opus/Sonnet task selection, not deciding whether Opus is discontinued",
+            "top Markdown blockquote summary box starting with 핵심 요약",
+            "one Markdown comparison table with columns 항목 / Sonnet / Opus",
+            "no English plan guide phrase; use 공식 문서/요금제 안내",
+            "no [ ] task checkbox notation; use normal bullets or □",
+            "vary repeated 실패 비용 wording with 복구 부담, 되돌리는 데 드는 시간, 재작업 비용",
             "Opus와 Sonnet을 나누는 핵심 기준 3가지",
             "failure cost, verifiability, iteration speed, work scope, reversibility, and architectural judgment in section 2",
             "실패 비용 기준",
@@ -829,7 +997,7 @@ export class WriterService {
       temperature: 0.2,
       messages: baseMessages,
     });
-    const draft = response?.trim() || params.fallbackDraft;
+    const draft = polishModelComparisonMicrocopy(response?.trim() || params.fallbackDraft);
     const violations = findPublicArticleDraftViolations(draft, params.articleIntent);
     if (violations.length === 0) return draft;
 
@@ -845,7 +1013,14 @@ export class WriterService {
             "Remove defensive audit phrases like 현재 이 글에서 공식 자료를 근거로, 단정할 수는 없습니다, 현재 입력 기준, 공식 확인된 자료는 없습니다.",
             "Replace them with natural personal judgment and source-checking prose.",
             "Use only the seven H2 sections requested by the user.",
-            "Keep the conclusion first: Sonnet is for default work, Opus is for high failure-cost work.",
+            `Use these H2 sections exactly: ${modelComparisonH2Sections.join(" / ")}.`,
+            "Do not put 결론 in the first H2. Use the final 마무리 section as the closing conclusion.",
+            "Keep the short answer near the opening: Sonnet is for default work, Opus is for high failure-cost work.",
+            "Add a top Markdown blockquote summary box starting with 핵심 요약.",
+            "Add one Markdown comparison table with columns 항목, Sonnet, Opus.",
+            "Replace any plan guide wording with 공식 문서/요금제 안내.",
+            "Replace [ ] checklist notation with normal bullets or □.",
+            "Reduce repeated 실패 비용 wording by using 복구 부담, 되돌리는 데 드는 시간, 재작업 비용 where natural.",
             "Section 2 must be Opus/Sonnet selection criteria only, without shutdown/retirement/official-confirmation discussion.",
             "Place the rumor section at section 4 or later, and keep it secondary to the model-selection criteria.",
             `Forbidden terms/topics: ${bannedTerms}.`,
@@ -861,10 +1036,10 @@ export class WriterService {
         },
       ],
     });
-    const rewrittenDraft = rewritten?.trim() || params.fallbackDraft;
+    const rewrittenDraft = polishModelComparisonMicrocopy(rewritten?.trim() || params.fallbackDraft);
     const rewriteViolations = findPublicArticleDraftViolations(rewrittenDraft, params.articleIntent);
 
-    return rewriteViolations.length === 0 ? rewrittenDraft : params.fallbackDraft;
+    return rewriteViolations.length === 0 ? rewrittenDraft : polishModelComparisonMicrocopy(params.fallbackDraft);
   }
 
   private async improveDraftReadability(params: {
@@ -894,30 +1069,45 @@ export class WriterService {
       riskLevel: sourceContext?.riskLevel,
       overlays: params.articleIntent.overlays,
     };
-    const validateDraft = (draft: string) => findPublicArticleDraftViolations(draft, params.articleIntent);
+    const validateDraft = (draft: string) => [
+      ...findPublicArticleDraftViolations(draft, params.articleIntent),
+      ...findEditorialReadabilityIssues(draft, params.articleIntent),
+    ];
+    const safeFallbackDraftCandidate =
+      params.articleIntent.primaryIntent === "model_comparison_guide"
+        ? polishModelComparisonMicrocopy(params.safeFallbackDraft)
+        : params.safeFallbackDraft;
     const safeFallbackDraft =
-      validateDraft(params.safeFallbackDraft).length === 0
-        ? params.safeFallbackDraft
-        : buildSafeModelComparisonFallbackDraft(params.post.title);
+      validateDraft(safeFallbackDraftCandidate).length === 0
+        ? safeFallbackDraftCandidate
+        : polishModelComparisonMicrocopy(buildSafeModelComparisonFallbackDraft(params.post.title));
     const chooseDraft = (
       editorialDraft: string | null,
       editorialChangeSummary: string | null,
       failureReason?: string,
     ): EditorialDraftResult => {
       if (editorialDraft) {
-        const editorialViolations = validateDraft(editorialDraft);
+        const polishedEditorialDraft =
+          params.articleIntent.primaryIntent === "model_comparison_guide"
+            ? polishModelComparisonMicrocopy(editorialDraft)
+            : editorialDraft;
+        const editorialViolations = validateDraft(polishedEditorialDraft);
         if (editorialViolations.length === 0) {
           return {
-            editorialDraft,
+            editorialDraft: polishedEditorialDraft,
             editorialChangeSummary: `editorialPass=used; ${editorialChangeSummary || "문장 흐름과 문체를 다듬었습니다."}`,
           };
         }
       }
 
-      const originalViolations = validateDraft(params.originalDraft);
+      const polishedOriginalDraft =
+        params.articleIntent.primaryIntent === "model_comparison_guide"
+          ? polishModelComparisonMicrocopy(params.originalDraft)
+          : params.originalDraft;
+      const originalViolations = validateDraft(polishedOriginalDraft);
       if (originalViolations.length === 0) {
         return {
-          editorialDraft: params.originalDraft,
+          editorialDraft: polishedOriginalDraft,
           editorialChangeSummary: `editorialPass=reverted_to_original${
             failureReason ? `; reason=${failureReason}` : ""
           }`,
@@ -960,14 +1150,33 @@ export class WriterService {
                 ...(params.articleIntent.primaryIntent === "model_comparison_guide"
                   ? [
                       "For model_comparison_guide with rumor_safety_overlay, edit the piece so it reads like a blog article, not a validation memo.",
+                      `Use this H2 flow: ${modelComparisonH2Sections.join(" / ")}.`,
+                      "Remove duplicate conclusion headings. The first H2 must not contain 결론. Only the final 마무리/정리 section should carry the closing role.",
                       "Start from a real usage scene, for example a large codebase where model choice becomes a problem only after the work gets risky.",
                       "Within the first two paragraphs, state the conclusion: Sonnet은 기본 작업용, Opus는 실패 비용이 큰 작업용.",
                       "After that, add 2-3 natural sentences about scope: this covers Opus/Sonnet selection criteria, splitting work in large codebases, and what to check when a rumor appears. It does not claim Opus shutdown or current pricing/policy as fact.",
+                      "Add a top Markdown blockquote summary box beginning with '> 핵심 요약:' after the introduction. Keep it to three short lines and do not repeat the final closing wording.",
+                      "Add one compact Markdown comparison table with columns 항목, Sonnet, Opus. Prefer this table over long lists for model-selection criteria.",
+                      "Never write plan guide. Use 공식 문서/요금제 안내.",
+                      "Do not use [ ] task checkboxes. Use normal list bullets or □ if a visual check marker is needed.",
+                      "If the exact phrase 실패 비용 appears many times, replace later occurrences with 복구 부담, 되돌리는 데 드는 시간, or 재작업 비용.",
                       "Add transition sentences between sections, such as 먼저 볼 것은 모델 이름이 아니라 실패 비용입니다, 이 기준을 잡고 나면 작업별 선택은 단순해집니다, or 중단설은 별도로 확인해야 합니다.",
                       "Add concrete illustrative work scenes without claiming they happened: currency-format display bug, tangled auth/session/permission refactor, and external provider changes such as mail/search/payment/image conversion.",
-                      "Add at least one author-view sentence in each major section, such as 저라면 이런 작업은 Sonnet으로 먼저 시작합니다 or 저는 모델 선택보다 작업 단위 분리가 먼저라고 봅니다.",
+                      "Use first-person judgment naturally, but do not overuse it. Keep exact phrases such as 제 기준, 저는, 개인적으로는 to four or fewer total uses.",
+                      "Avoid repeating the same sentence start. Replace some first-person sentences with natural judgment prose, such as 이럴 때는 모델 성능보다 실패 비용을 먼저 보는 편이 판단이 덜 흔들립니다 or 이 정도로 영향 범위가 커지면 Opus로 먼저 방향을 잡는 편이 안전합니다.",
+                      "Reduce manual-like list density. Do not make the article a sequence of checklists. Put interpretation paragraphs before and after lists.",
+                      "Hard limit: no H2 section may contain more than two list blocks. The checklist section may use one compact list, not several separate lists.",
+                      "Avoid H3 subsections that each contain their own list. Rewrite those parts as narrative paragraphs.",
+                      "If one H2 section has more than one list, convert at least one list into natural prose. Concentrate checklist-style lists in the later sections only.",
+                      "Use the final H2 title 마무리: 모델보다 작업 단위가 먼저입니다 unless a very similar 마무리/정리 title is already present.",
+                      "In the opening and middle sections, prefer scene-based explanation and judgment criteria over tables or lists.",
+                      "In the Opus rumor section, add the reader's emotional context: Claude Code users who rely on Opus for large refactors, debugging, or design review can feel unsettled by model availability talk.",
+                      "Make clear that community signals and GitHub Issues can be fast early signals but are not official announcements. The practical first move is to check where one's own work depends on Opus, not to immediately switch tools.",
+                      "Write at least one example in a situation -> judgment -> action flow. You may label it naturally as 상황, 판단, 행동 once, but keep it readable.",
+                      "Example flow: 상황: currency formatting breaks only on one screen. 판단: related files are narrow and tests exist, so Sonnet is enough to start. 행동: ask for a minimal patch limited to the formatting function and tests. Write this in natural Korean, not English if/then.",
                       "Limit the exact phrase 확인 필요 to at most two uses. Prefer natural wording such as 아직 그렇게 보기엔 이릅니다, 결론을 서두르지 않는 편이 낫다고 봅니다, or 내 계정과 작업 환경에서 확인한 뒤 판단하는 편이 안전합니다.",
-                      "Close with a personal operating principle, not a repeated checklist.",
+                      "Use a three-paragraph introduction: real large-codebase scene, core conclusion, then natural scope about model selection criteria, not overreacting to rumors, and splitting work into reversible units.",
+                      "Close with an operating philosophy, not a repeated checklist: model names matter less than splitting work small enough to reverse, Sonnet is for quickly verifiable work, and Opus is for expensive decisions.",
                     ]
                   : []),
               ].join(" "),
@@ -1473,7 +1682,7 @@ export class WriterService {
       title: params.post.title,
       outline: isModelComparisonGuide
         ? [
-            "## 결론: Sonnet은 기본 작업, Opus는 실패 비용이 큰 작업",
+            "## 모델 이름보다 먼저 봐야 할 것은 실패 비용입니다",
             "- 왜 필요한가: 독자가 먼저 선택 기준을 잡고 세부 설명을 읽게 한다.",
             "- 이 글은 Opus 중단 여부를 판정하는 글이 아니라 Claude Code에서 Sonnet과 Opus를 어떤 작업 기준으로 나눠 쓸지 정리하는 글이다.",
             "- 중단설은 그 기준을 흔들 수 있는 변수이므로 뒤쪽에서 별도 확인 항목으로 다룬다.",
@@ -1487,8 +1696,8 @@ export class WriterService {
             "- 왜 필요한가: 공식 확인 전 계정/플랜/모델 선택 화면을 점검하게 한다.",
             "## 추천 워크플로우",
             "- 왜 필요한가: Sonnet 기본, Opus 제한 사용이라는 운영 기준을 제시한다.",
-            "## 결론",
-            "- 왜 필요한가: 중단 확정이 아니라 확인 필요한 신호라는 태도를 유지한다.",
+            "## 마무리: 모델보다 작업 단위가 먼저입니다",
+            "- 왜 필요한가: 모델 이름보다 작업을 되돌릴 수 있게 나누는 운영 기준으로 닫는다.",
           ].join("\n")
         : isCommunityRumorWatch
         ? [
@@ -1551,8 +1760,12 @@ export class WriterService {
                     ? [
                         "This is model_comparison_guide mode.",
                         "Plan the article around Opus/Sonnet task selection, not internal project implementation.",
-                        "Use the required seven-section structure: conclusion first, three core Opus/Sonnet selection criteria, task criteria, rumor separated from model-selection criteria, rumor checklist, workflow, conclusion.",
+                        `Use the required seven-section structure: ${modelComparisonH2Sections.join(" / ")}.`,
+                        "Do not use 결론 in the first H2. The last H2 should be 마무리 or 정리.",
                         "Section 2 must not include shutdown, retirement, or official-confirmation discussion. It must cover failure cost, verifiability, iteration speed, work scope, reversibility, and architectural judgment.",
+                        "Avoid [ ] task checkbox notation in checklist planning. Use normal bullets or □.",
+                        "Use 자연스러운 한국어 such as 공식 문서/요금제 안내 instead of English plan-guide wording.",
+                        "Avoid excessive repetition of 실패 비용 by mixing 복구 부담, 되돌리는 데 드는 시간, and 재작업 비용 where natural.",
                         "Place Opus shutdown rumor discussion only in section 4 or later so the early flow stays centered on model selection.",
                         "If rumor_safety_overlay is present, require 확인 필요 for unverified shutdown or model availability claims.",
                         `Do not plan sections about these internal implementation terms: ${publicArticleForbiddenTerms.join(", ")}.`,
@@ -1637,7 +1850,7 @@ export class WriterService {
                           "Opus as high failure-cost work model",
                           "failure cost, verifiability, iteration speed, work scope, reversibility, and architectural judgment as section 2 criteria",
                           "Opus shutdown rumor handled only after model-selection criteria",
-                          "Claude Code model selector, plan guide, release notes, status page",
+                          "Claude Code model selector, 공식 문서/요금제 안내, release notes, status page",
                           "GitHub Issues as reinforcement only, not official confirmation",
                         ]
                     : [
@@ -1685,37 +1898,12 @@ export class WriterService {
     });
     const isCommunityRumorWatch = articleIntent.primaryIntent === "community_rumor_watch";
     const isModelComparisonGuide = articleIntent.primaryIntent === "model_comparison_guide";
-    const fallbackDraft = [
+    const fallbackDraft = isModelComparisonGuide
+      ? buildSafeModelComparisonFallbackDraft(params.post.title)
+      : [
       `# ${params.post.title}`,
       "",
-      ...(isModelComparisonGuide
-        ? [
-            "## 결론: Sonnet은 기본 작업, Opus는 실패 비용이 큰 작업",
-            "Claude Code에서 Sonnet은 기본 코딩 작업과 반복 수정에 두고, Opus는 실패 비용이 큰 설계 검토와 난도 높은 디버깅에 제한적으로 쓰는 편이 현실적입니다.",
-            "이 글은 Opus 중단 여부를 판정하는 글이 아닙니다. 핵심은 Claude Code에서 Sonnet과 Opus를 어떤 작업 기준으로 나눠 쓸지 정리하는 것입니다. 중단설은 그 기준을 흔들 수 있는 변수라서 뒤쪽에서 별도로 확인합니다.",
-            "",
-            "## Opus와 Sonnet을 나누는 핵심 기준 3가지",
-            "저는 실패 비용, 검증 가능성, 반복 속도를 먼저 봅니다. 되돌리기 쉬운 작은 수정은 Sonnet으로 충분하고, 설계 판단이 필요하거나 한 번 틀리면 후폭풍이 큰 작업은 Opus를 붙이는 쪽이 낫습니다.",
-            "",
-            "## 작업별 추천 기준",
-            "- 일반 수정과 반복 작업: Sonnet",
-            "- 큰 설계 변경과 실패 비용이 큰 판단: Opus",
-            "",
-            "## Opus 중단설은 모델 선택 기준과 분리해서 봐야 합니다",
-            "커뮤니티나 GitHub 이슈에서 비슷한 말이 보여도, 그것만으로 Opus가 빠졌다고 말하기엔 이릅니다.",
-            "",
-            "## 중단설 전에 확인할 체크리스트",
-            "- Claude Code 모델 선택 화면",
-            "- 계정과 플랜별 안내",
-            "- 공식 문서와 릴리즈 노트",
-            "",
-            "## 추천 워크플로우",
-            "Sonnet으로 먼저 빠르게 진행하고, 막히는 설계 판단이나 검증 비용이 큰 구간에서만 Opus를 쓰는 방식이 현실적입니다.",
-            "",
-            "## 마무리",
-            "지금은 Opus 중단 확정이 아니라 확인 필요한 신호입니다. 공식 출처와 내 계정의 모델 선택 화면을 함께 확인하는 편이 낫습니다.",
-          ]
-        : isCommunityRumorWatch
+      ...(isCommunityRumorWatch
         ? [
             "## Claude Code Opus 중단설이 왜 나온 걸까",
             "커뮤니티에서 나온 이야기를 먼저 조기 신호로 분리해 봅니다. 아직 공식 확인 전이므로 확정 사실처럼 다루지 않습니다.",
@@ -1853,7 +2041,7 @@ export class WriterService {
                         `Do not include these internal implementation terms unless the article topic is the blog automation app itself: ${communityRumorWatchInternalTerms.join(", ")}.`,
                         "Do not discuss blog automation architecture, publishing automation, Tistory export, provider structure, API routes, or internal test logs in this article.",
                         "Do not use English if/then conditional sentences in normal prose. Use natural Korean condition sentences instead.",
-                        "Include concrete verification examples such as model selector, plan guide, official documentation, official changelog, status page, and relevant GitHub Issues.",
+                        "Include concrete verification examples such as model selector, 공식 문서/요금제 안내, official documentation, official changelog, status page, and relevant GitHub Issues.",
                         "Include a personal judgment section. Do not fabricate direct experience; phrase it as judgment or operating principle when direct testing was not provided.",
                         "End with a personal but cautious conclusion: this is not confirmed shutdown, it is a signal worth checking in one's own account and official sources.",
                       ]

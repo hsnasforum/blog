@@ -24,12 +24,15 @@ export default async function PostWorkflowPage({ params }: { params: { id: strin
 
   return (
     <div className="space-y-4">
-      <header className="rounded-md border border-slate-200 bg-white p-5">
+      <header className="hero-card p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-lg font-semibold text-slate-900">Post Workflow</h1>
+          <div>
+            <span className="badge badge-accent">Post Workflow</span>
+            <h1 className="mt-3 text-xl font-bold text-slate-900">초안 작성 워크플로우</h1>
+          </div>
           <Link
             href={`/topics/${post.topicId}/trends`}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+            className="btn"
           >
             Trend Scout로 돌아가기
           </Link>

@@ -79,20 +79,34 @@ const searchIntentTagPattern =
   /Claude\s*Code|Claude\s*Pro|Opus|오푸스|AI\s*코딩\s*도구|모델\s*제공\s*중단|개발자\s*요금제|AI\s*도구\s*검토|클로드|클코/i;
 const requiredCommunityTagPatterns = [/Claude\s*Code|클코/i, /Opus|오푸스/i, /Sonnet|소넷/i, /차이|선택\s*기준|모델\s*선택/i];
 const personalJudgmentPattern =
-  /개인적으로|개인적인\s*판단|내가\s*보기엔|내\s*판단|제\s*판단|저는|제가\s*추천|제가\s*보기엔|현실적인\s*대응|바로\s*갈아타기보다|대응\s*방향|마무리/i;
+  /개인적으로|개인적인\s*판단|내가\s*보기엔|내\s*판단|제\s*판단|제\s*운영\s*원칙|저는|제가\s*추천|제가\s*보기엔|현실적인\s*대응|바로\s*갈아타기보다|대응\s*방향|마무리/i;
+const firstPersonJudgmentPattern = /제\s*기준|저는|개인적으로는/g;
+const rumorEmotionalContextPattern =
+  /불안|흔들|민감|메인\s*코딩\s*도구|의존|작업\s*방식|큰\s*리팩터링|원인\s*분석|그냥\s*루머처럼만\s*들리지는/i;
+const situationJudgmentActionPattern =
+  /(상황[\s\S]{0,500}판단[\s\S]{0,500}행동)|(통화|금액\s*표시|인증|세션|권한|리팩터링)[\s\S]{0,500}(Sonnet|Opus|소넷|오푸스)[\s\S]{0,500}(요청|제안|물어보|맡기|수정안)/i;
+const operatingPhilosophyPattern =
+  /모델\s*이름보다\s*작업\s*단위|작업을\s*작게\s*나누|되돌릴\s*수\s*있|실패했을\s*때\s*되돌|빠르게\s*확인할\s*수\s*있는\s*작업|실패\s*비용이\s*큰\s*판단/i;
 const modelComparisonConclusionPattern =
   /Sonnet은\s*기본\s*작업|Sonnet.*기본.*작업|Opus는\s*실패\s*비용|Opus.*실패\s*비용/i;
-const firstSectionConclusionPattern =
-  /^#{1,2}\s*결론|^##\s*결론|Sonnet은\s*기본\s*작업[\s\S]{0,400}Opus는\s*실패\s*비용/i;
+const h2ConclusionTitlePattern = /결론/i;
+const topSummaryBoxPattern = /^>\s*(?:\*\*)?핵심\s*요약/m;
+const sonnetOpusComparisonTablePattern = /\|\s*항목\s*\|\s*Sonnet\s*\|\s*Opus\s*\|/i;
+const finalSectionTitlePattern = /마무리|정리/i;
 const secondSectionCriteriaPattern = /Opus|Sonnet|오푸스|소넷|기준|핵심|나누/i;
 const secondSectionRumorDriftPattern = /중단|퇴역|공식\s*확인/i;
 const rumorSectionTitlePattern = /중단설|중단|안\s*보인|공식\s*확인|계정|플랜|모델\s*선택\s*화면|UI\s*표시|일시\s*장애/i;
 const bodyHtmlMixedMetadataPattern = /메타\s*설명\s*:|태그\s*:|추천\s*태그|SEO\s*title|metaDescription|reviewReport|검수\s*리포트/i;
 const escapedTistoryTagPattern = /&lt;(p|h2|h3)\s+data-ke-size/i;
+const tistorySummaryBoxPattern = /<blockquote[\s\S]*data-ke-style="style1"[\s\S]*핵심\s*요약/i;
+const tistoryComparisonTablePattern = /<table[\s\S]*data-ke-align="alignLeft"[\s\S]*Sonnet[\s\S]*Opus/i;
+const planGuidePattern = /\bplan\s*guide\b/i;
+const markdownCheckboxPattern = /\[\s\]/;
+const failureCostAlternativePattern = /복구\s*부담|되돌리는\s*데\s*드는\s*시간|재작업\s*비용/i;
 const defensiveAuditPhrasePattern =
   /현재\s*이\s*글에서\s*공식\s*자료를\s*근거로|단정할\s*수는\s*없습니다|모두\s*확인\s*필요로\s*두는\s*것이\s*안전합니다|현재\s*입력\s*기준|공식\s*확인된\s*자료는\s*없습니다/i;
 const naturalSafetyPhrasePattern =
-  /아직(?:은)?[\s\S]{0,40}말하기\s*이릅니다|저는[\s\S]{0,80}보는\s*편이\s*맞다고\s*봅니다|중단\s*확정보다는\s*확인해야\s*할\s*신호|작업별\s*의존도|결론을\s*서두르지\s*않는\s*편이\s*낫다고\s*봅니다|내\s*계정과\s*작업\s*환경/i;
+  /아직(?:은)?[\s\S]{0,40}말하기\s*이릅니다|저는[\s\S]{0,80}보는\s*편이\s*맞다고\s*봅니다|중단\s*확정보다는\s*확인해야\s*할\s*신호|작업별\s*의존도|결론을\s*서두르지\s*않는\s*편이\s*낫다고\s*봅니다|내\s*계정(?:과|\\s*화면)|작업\s*환경|사실로\s*단정하지\s*않|커뮤니티\s*신호는\s*안전\s*점검의\s*배경/i;
 const realUsageOpeningPattern =
   /큰\s*코드베이스|코드베이스|실제\s*작업|작업하다\s*보면|Claude\s*Code를\s*쓰다\s*보면|모델\s*선택은|버그\s*수정|리팩터링|세션|권한|인증/i;
 const transitionSentencePattern =
@@ -348,6 +362,50 @@ function extractH2Titles(markdown) {
     .filter(Boolean);
 }
 
+function extractH2Sections(markdown) {
+  const sections = [];
+  let current = null;
+
+  for (const line of markdown.split(/\r?\n/)) {
+    const h2Match = line.match(/^##\s+(.+?)\s*$/);
+    if (h2Match) {
+      if (current) sections.push(current);
+      current = {
+        title: h2Match[1].replace(/^\d+[.)]\s*/, "").trim(),
+        body: "",
+      };
+      continue;
+    }
+
+    if (current) {
+      current.body += `${line}\n`;
+    }
+  }
+
+  if (current) sections.push(current);
+  return sections;
+}
+
+function countListBlocks(markdown) {
+  let blocks = 0;
+  let inList = false;
+
+  for (const line of markdown.split(/\r?\n/)) {
+    const isListLine = /^\s*(?:[-*]|\d+[.)])\s+/.test(line);
+    if (isListLine && !inList) {
+      blocks += 1;
+      inList = true;
+      continue;
+    }
+
+    if (!isListLine && line.trim()) {
+      inList = false;
+    }
+  }
+
+  return blocks;
+}
+
 function extractParagraphs(markdown) {
   return markdown
     .split(/\n{2,}/)
@@ -584,14 +642,26 @@ async function runE2E() {
   const metaDescription = String(seoPackage.metaDescription ?? "");
   const publishDecision = extractPublishDecision(reviewReport);
   const h2Titles = extractH2Titles(draft);
+  const h2Sections = extractH2Sections(draft);
   const paragraphs = extractParagraphs(draft);
   const firstParagraph = paragraphs[0] ?? "";
   const firstTwoParagraphs = paragraphs.slice(0, 2).join("\n\n");
   const checkNeededCount = countOccurrences(draft, /확인\s*필요/g);
+  const failureCostCount = countOccurrences(draft, /실패\s*비용/g);
+  const firstPersonJudgmentCount = countOccurrences(draft, firstPersonJudgmentPattern);
   const transitionSentenceCount = countOccurrences(draft, transitionSentencePattern);
   const closingPersonalJudgment = extractClosingPersonalJudgment(draft);
+  const firstSectionTitle = h2Titles[0] ?? "";
   const secondSectionTitle = h2Titles[1] ?? "";
+  const finalSectionTitle = h2Titles[h2Titles.length - 1] ?? "";
+  const conclusionH2Count = h2Titles.filter((heading) => h2ConclusionTitlePattern.test(heading)).length;
   const rumorSectionIndex = h2Titles.findIndex((sectionTitle, index) => index > 0 && rumorSectionTitlePattern.test(sectionTitle));
+  const rumorSection = rumorSectionIndex >= 0 ? h2Sections[rumorSectionIndex] : null;
+  const listDensityBySection = h2Sections.map((section) => ({
+    title: section.title,
+    listBlocks: countListBlocks(section.body),
+  }));
+  const overloadedListSections = listDensityBySection.filter((section) => section.listBlocks > 2);
   const sourceTagCount = tags.filter((tag) => sourceTagPattern.test(tag)).length;
   const searchIntentTagCount = tags.filter((tag) => searchIntentTagPattern.test(tag)).length;
   const cautionCount = countMatches(draftCautionPatterns, draft);
@@ -612,13 +682,22 @@ async function runE2E() {
     "draft should state the core Sonnet/Opus conclusion within the first two paragraphs",
     { firstTwoParagraphs },
   );
-  assertStep(
-    firstSectionConclusionPattern.test(draft.slice(0, 1000)) && modelComparisonConclusionPattern.test(draft),
-    "draft should lead with Sonnet default / Opus high failure-cost conclusion",
-    { draftPreview: draft.slice(0, 1200) },
-  );
   assertStep(h2Titles.length >= 6, "draft should keep the requested model-comparison outline depth", {
     h2Titles,
+  });
+  assertStep(conclusionH2Count <= 1, "draft should not repeat conclusion H2 headings", {
+    conclusionH2Count,
+    h2Titles,
+  });
+  assertStep(!h2ConclusionTitlePattern.test(firstSectionTitle), "first H2 should not be a conclusion heading", {
+    firstSectionTitle,
+    h2Titles,
+  });
+  assertStep(topSummaryBoxPattern.test(draft), "draft should include a top 핵심 요약 blockquote", {
+    draftPreview: draft.slice(0, 1600),
+  });
+  assertStep(sonnetOpusComparisonTablePattern.test(draft), "draft should include a Sonnet/Opus comparison table", {
+    draftPreview: draft.slice(0, 2600),
   });
   assertStep(secondSectionCriteriaPattern.test(secondSectionTitle), "second section should be Opus/Sonnet selection criteria", {
     secondSectionTitle,
@@ -632,13 +711,32 @@ async function runE2E() {
     rumorSectionNumber: rumorSectionIndex + 1,
     h2Titles,
   });
+  assertStep(finalSectionTitlePattern.test(finalSectionTitle), "final section should be a 마무리 or 정리 section", {
+    finalSectionTitle,
+    h2Titles,
+  });
   assertStep(checkNeededCount < 3, "draft repeats 확인 필요 too often", {
     checkNeededCount,
     draftPreview: draft.slice(0, 1800),
   });
+  assertStep(firstPersonJudgmentCount <= 4, "draft overuses first-person judgment phrasing", {
+    firstPersonJudgmentCount,
+    draftPreview: draft.slice(0, 2400),
+  });
+  assertStep(overloadedListSections.length === 0, "draft has too many list blocks in one H2 section", {
+    listDensityBySection,
+  });
   assertStep(transitionSentenceCount >= 2, "draft lacks section transition sentences", {
     transitionSentenceCount,
     draftPreview: draft.slice(0, 2400),
+  });
+  assertStep(
+    rumorSection?.body && rumorEmotionalContextPattern.test(rumorSection.body),
+    "rumor section lacks reader emotional context",
+    { rumorSectionTitle: rumorSection?.title, rumorSectionPreview: rumorSection?.body.slice(0, 1400) },
+  );
+  assertStep(situationJudgmentActionPattern.test(draft), "draft lacks a situation/judgment/action example flow", {
+    draftPreview: draft.slice(0, 2600),
   });
   assertStep(cautionCount >= 2, "draft lacks community-signal caution language", {
     cautionCount,
@@ -658,6 +756,21 @@ async function runE2E() {
   assertStep(!hasPlainIfThen(draft), "draft contains English if/then prose", {
     draftPreview: draft.slice(0, 1600),
   });
+  assertStep(!planGuidePattern.test(draft), "draft contains unnatural plan guide wording", {
+    draftPreview: draft.slice(0, 2400),
+  });
+  assertStep(!markdownCheckboxPattern.test(draft), "draft contains markdown task checkbox notation", {
+    draftPreview: draft.slice(0, 3200),
+  });
+  assertStep(failureCostCount <= 8, "draft repeats 실패 비용 too often", {
+    failureCostCount,
+    draftPreview: draft.slice(0, 3200),
+  });
+  assertStep(
+    failureCostCount <= 5 || failureCostAlternativePattern.test(draft),
+    "draft should vary repeated 실패 비용 wording",
+    { failureCostCount, draftPreview: draft.slice(0, 3200) },
+  );
   assertStep(!hasBadAssertion(draft), "draft asserts unverified community signal as fact", {
     title,
     draftPreview: draft.slice(0, 1200),
@@ -687,6 +800,9 @@ async function runE2E() {
   });
   assertStep(closingPersonalJudgment.length > 0, "draft ending should include a personal operating judgment", {
     draftTail: draft.slice(-1800),
+  });
+  assertStep(operatingPhilosophyPattern.test(draft.slice(-2200)), "draft ending should close with operating philosophy", {
+    draftTail: draft.slice(-2200),
   });
   assertStep(
     /공식\s*출처\s*확인\s*필요|공식\s*확인\s*필요|공식\s*출처|공식\s*확인|공식\s*공지\s*여부|출처\s*성격|출처\s*처리\s*보강|GitHub\s*Issues는\s*공식\s*발표가\s*아니라/i.test(reviewReport),
@@ -728,6 +844,12 @@ async function runE2E() {
   assertStep(!bodyHtmlMixedMetadataPattern.test(bodyHtml), "Tistory bodyHtml contains mixed SEO/review metadata", {
     bodyPreview: bodyHtml.slice(0, 1600),
   });
+  assertStep(!planGuidePattern.test(bodyHtml), "Tistory bodyHtml contains unnatural plan guide wording", {
+    bodyPreview: bodyHtml.slice(0, 2400),
+  });
+  assertStep(!markdownCheckboxPattern.test(bodyHtml), "Tistory bodyHtml contains markdown checkbox notation", {
+    bodyPreview: bodyHtml.slice(0, 3200),
+  });
   assertStep(!escapedTistoryTagPattern.test(bodyHtml), "Tistory bodyHtml contains escaped Tistory tags", {
     bodyPreview: bodyHtml.slice(0, 1600),
   });
@@ -736,6 +858,12 @@ async function runE2E() {
     "Tistory bodyHtml does not contain expected rendered Tistory tags",
     { bodyPreview: bodyHtml.slice(0, 1600) },
   );
+  assertStep(tistorySummaryBoxPattern.test(bodyHtml), "Tistory bodyHtml should render the summary box as blockquote", {
+    bodyPreview: bodyHtml.slice(0, 2200),
+  });
+  assertStep(tistoryComparisonTablePattern.test(bodyHtml), "Tistory bodyHtml should render the Sonnet/Opus table", {
+    bodyPreview: bodyHtml.slice(0, 3200),
+  });
 
   const prismaAfter = new PrismaClient();
   const [savedSignal, savedCandidate, logs] = await Promise.all([
@@ -807,14 +935,26 @@ async function runE2E() {
       firstParagraph: firstParagraph.slice(0, 300),
       conclusionInFirstTwoParagraphs: modelComparisonConclusionPattern.test(firstTwoParagraphs),
       checkNeededCount,
+      failureCostCount,
+      failureCostWordingVaried: failureCostCount <= 5 || failureCostAlternativePattern.test(draft),
+      firstPersonJudgmentCount,
       draftCautionMatchCount: cautionCount,
       draftInternalTermsRemoved: true,
       draftPlainIfThenRemoved: true,
       transitionSentenceCount,
+      conclusionH2Count,
+      topSummaryBoxIncluded: topSummaryBoxPattern.test(draft),
+      sonnetOpusComparisonTableIncluded: sonnetOpusComparisonTablePattern.test(draft),
+      listDensityBySection,
+      rumorEmotionalContextIncluded: Boolean(rumorSection?.body && rumorEmotionalContextPattern.test(rumorSection.body)),
+      situationJudgmentActionIncluded: situationJudgmentActionPattern.test(draft),
+      firstSectionTitle,
       secondSectionTitle,
+      finalSectionTitle,
       rumorSectionNumber: rumorSectionIndex + 1,
       personalJudgmentIncluded: true,
       closingPersonalJudgment: closingPersonalJudgment.slice(0, 300),
+      operatingPhilosophyEnding: operatingPhilosophyPattern.test(draft.slice(-2200)),
       editorialPass: editorialLog?.outputSummary ?? "",
       draftBadAssertion: false,
       reviewDecision: publishDecision.slice(0, 180),
@@ -830,6 +970,8 @@ async function runE2E() {
       bodyHtmlLength: bodyHtml.length,
       bodyHtmlHasMixedMetadata: false,
       bodyHtmlHasEscapedTags: false,
+      bodyHtmlHasSummaryBox: tistorySummaryBoxPattern.test(bodyHtml),
+      bodyHtmlHasComparisonTable: tistoryComparisonTablePattern.test(bodyHtml),
     },
     generationLogs: requiredLogActions.map((action) => ({
       action,

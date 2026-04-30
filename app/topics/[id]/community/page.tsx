@@ -45,11 +45,12 @@ export default async function CommunityPage({ params }: { params: { id: string }
 
   return (
     <div className="space-y-4">
-      <header className="rounded-md border border-slate-200 bg-white p-5">
+      <header className="hero-card p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-lg font-semibold text-slate-900">Community Radar</h1>
-            <p className="mt-1 text-sm text-slate-600">
+            <span className="badge badge-accent">Community Radar</span>
+            <h1 className="mt-3 text-xl font-bold text-slate-900">커뮤니티 조기 신호</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
               커뮤니티 반응은 출처가 있는 신호만 저장합니다. 댓글 전문 대량 저장이나 무단 스크래핑은 하지 않습니다.
             </p>
             <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -58,7 +59,7 @@ export default async function CommunityPage({ params }: { params: { id: string }
           </div>
           <Link
             href={`/topics/${topic.id}/trends`}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+            className="btn"
           >
             Trend Scout
           </Link>
@@ -75,10 +76,10 @@ export default async function CommunityPage({ params }: { params: { id: string }
         candidates={candidateOptions}
       />
 
-      <section className="rounded-md border border-slate-200 bg-white p-5">
-        <h2 className="text-base font-semibold text-slate-900">저장된 CommunitySignal</h2>
+      <section className="glass-card p-5">
+        <h2 className="section-title">저장된 CommunitySignal</h2>
         <div className="mt-3 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
+          <table className="data-table text-left">
             <thead className="text-slate-500">
               <tr>
                 <th className="px-2 py-2">후보</th>

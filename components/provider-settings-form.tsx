@@ -103,7 +103,7 @@ export function ProviderSettingsForm({
   }
 
   return (
-    <section className="space-y-4 rounded-md border border-slate-200 bg-white p-5">
+    <section className="glass-card space-y-4 p-5">
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-1">
           <label className="text-sm font-medium text-slate-800" htmlFor="provider-mode">
@@ -113,7 +113,7 @@ export function ProviderSettingsForm({
             id="provider-mode"
             value={mode}
             onChange={(event) => setMode(event.target.value as ProviderMode)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="field"
           >
             <option value="oauth-proxy">oauth-proxy</option>
             <option value="api-key">api-key</option>
@@ -128,7 +128,7 @@ export function ProviderSettingsForm({
             id="provider-model"
             value={model}
             onChange={(event) => setModel(event.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="field"
           >
             {modelOptions.map((option) => (
               <option key={option} value={option}>
@@ -147,7 +147,7 @@ export function ProviderSettingsForm({
           id="provider-base-url"
           value={baseUrl}
           onChange={(event) => setBaseUrl(event.target.value)}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="field"
         />
       </div>
 
@@ -159,7 +159,7 @@ export function ProviderSettingsForm({
           id="custom-model"
           value={customModel}
           onChange={(event) => setCustomModel(event.target.value)}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="field"
           placeholder="목록에 없는 모델명을 직접 입력"
         />
       </div>
@@ -183,7 +183,7 @@ export function ProviderSettingsForm({
           type="button"
           onClick={checkAuth}
           disabled={pending !== null}
-          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 disabled:opacity-60"
+          className="btn disabled:opacity-60"
         >
           {pending === "check" ? "확인 중..." : "인증 확인 / 모델 불러오기"}
         </button>
@@ -191,7 +191,7 @@ export function ProviderSettingsForm({
           type="button"
           onClick={saveConfig}
           disabled={pending !== null}
-          className="rounded-md bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60"
+          className="btn btn-primary disabled:opacity-60"
         >
           {pending === "save" ? "저장 중..." : "설정 저장"}
         </button>

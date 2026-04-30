@@ -123,7 +123,7 @@ export function WorkflowEditor({ initialPost }: { initialPost: WorkflowPost }) {
         {workflowSteps.map((step) => (
           <span
             key={step}
-            className={`rounded-md border px-3 py-1 text-xs font-medium ${stepClass(step, post.workflowStep)}`}
+          className={`badge ${stepClass(step, post.workflowStep)}`}
           >
             {step}
           </span>
@@ -135,7 +135,7 @@ export function WorkflowEditor({ initialPost }: { initialPost: WorkflowPost }) {
           type="button"
           onClick={() => callGenerate(`/api/posts/${post.id}/generate-outline`, "개요 생성")}
           disabled={pending !== null}
-          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 disabled:opacity-60"
+          className="btn disabled:opacity-60"
         >
           {pending === "개요 생성" ? "실행 중..." : "개요 생성"}
         </button>
@@ -143,7 +143,7 @@ export function WorkflowEditor({ initialPost }: { initialPost: WorkflowPost }) {
           type="button"
           onClick={() => callGenerate(`/api/posts/${post.id}/generate-draft`, "초안 생성")}
           disabled={pending !== null}
-          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 disabled:opacity-60"
+          className="btn disabled:opacity-60"
         >
           {pending === "초안 생성" ? "실행 중..." : "초안 생성"}
         </button>
@@ -151,7 +151,7 @@ export function WorkflowEditor({ initialPost }: { initialPost: WorkflowPost }) {
           type="button"
           onClick={() => callGenerate(`/api/posts/${post.id}/review`, "검수 실행")}
           disabled={pending !== null}
-          className="rounded-md bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60"
+          className="btn btn-primary disabled:opacity-60"
         >
           {pending === "검수 실행" ? "실행 중..." : "검수 실행"}
         </button>
@@ -159,7 +159,7 @@ export function WorkflowEditor({ initialPost }: { initialPost: WorkflowPost }) {
           type="button"
           onClick={() => savePatch({ workflowStep: "approved" }, "승인 처리")}
           disabled={pending !== null || !canApprove}
-          className="rounded-md bg-emerald-700 px-3 py-2 text-sm text-white disabled:opacity-60"
+          className="btn btn-primary disabled:opacity-60"
         >
           {pending === "승인 처리" ? "처리 중..." : "승인 처리"}
         </button>
@@ -183,14 +183,14 @@ export function WorkflowEditor({ initialPost }: { initialPost: WorkflowPost }) {
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
 
       <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-        <section className="space-y-3 rounded-md border border-slate-200 bg-white p-4">
+        <section className="glass-card space-y-3 p-4">
           <div className="space-y-1">
             <label className="text-sm font-medium text-slate-800" htmlFor="post-title">
               제목
             </label>
             <input
               id="post-title"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              className="field"
               value={post.title}
               onChange={(event) => updatePost({ title: event.target.value })}
             />
@@ -202,7 +202,7 @@ export function WorkflowEditor({ initialPost }: { initialPost: WorkflowPost }) {
             </label>
             <textarea
               id="post-angle"
-              className="min-h-20 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              className="field min-h-20"
               value={post.angle ?? ""}
               onChange={(event) => updatePost({ angle: event.target.value })}
             />
@@ -214,7 +214,7 @@ export function WorkflowEditor({ initialPost }: { initialPost: WorkflowPost }) {
             </label>
             <textarea
               id="post-outline"
-              className="min-h-44 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-xs"
+              className="field min-h-44 font-mono text-xs"
               value={post.outline ?? ""}
               onChange={(event) => updatePost({ outline: event.target.value })}
             />
@@ -226,7 +226,7 @@ export function WorkflowEditor({ initialPost }: { initialPost: WorkflowPost }) {
             </label>
             <textarea
               id="post-draft"
-              className="min-h-[420px] w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-xs"
+              className="field min-h-[420px] font-mono text-xs"
               value={post.draft ?? ""}
               onChange={(event) => updatePost({ draft: event.target.value })}
             />
@@ -248,20 +248,20 @@ export function WorkflowEditor({ initialPost }: { initialPost: WorkflowPost }) {
               )
             }
             disabled={pending !== null}
-            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 disabled:opacity-60"
+            className="btn disabled:opacity-60"
           >
             {pending === "내용 저장" ? "저장 중..." : "내용 저장"}
           </button>
         </section>
 
-        <aside className="space-y-3 rounded-md border border-slate-200 bg-white p-4">
+        <aside className="glass-card space-y-3 p-4">
           <div className="space-y-1">
             <label className="text-sm font-medium text-slate-800" htmlFor="review-report">
               review 리포트
             </label>
             <textarea
               id="review-report"
-              className="min-h-64 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-xs"
+              className="field min-h-64 font-mono text-xs"
               value={post.reviewReport ?? ""}
               onChange={(event) => updatePost({ reviewReport: event.target.value })}
             />
@@ -273,7 +273,7 @@ export function WorkflowEditor({ initialPost }: { initialPost: WorkflowPost }) {
             </label>
             <textarea
               id="seo-package"
-              className="min-h-48 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-xs"
+              className="field min-h-48 font-mono text-xs"
               value={post.seoPackage ?? ""}
               onChange={(event) => updatePost({ seoPackage: event.target.value })}
             />

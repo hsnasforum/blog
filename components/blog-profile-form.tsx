@@ -37,7 +37,7 @@ export function BlogProfileForm({ profile, preset, action }: BlogProfileFormProp
   };
 
   return (
-    <form action={action} className="space-y-4 rounded-md border border-slate-200 bg-white p-5">
+    <form action={action} className="glass-card space-y-4 p-5">
       <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -52,7 +52,7 @@ export function BlogProfileForm({ profile, preset, action }: BlogProfileFormProp
               setValues(preset);
               setPresetApplied(true);
             }}
-            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100"
+            className="btn"
           >
             REFUSE HUB 프리셋 적용
           </button>
@@ -73,7 +73,7 @@ export function BlogProfileForm({ profile, preset, action }: BlogProfileFormProp
               name={field.name}
               value={values[field.name]}
               onChange={(event) => updateField(field.name, event.target.value)}
-              className={`${field.minHeightClassName ?? "min-h-20"} w-full rounded-md border border-slate-300 px-3 py-2 text-sm`}
+              className={`${field.minHeightClassName ?? "min-h-20"} field`}
             />
           ) : (
             <input
@@ -81,7 +81,7 @@ export function BlogProfileForm({ profile, preset, action }: BlogProfileFormProp
               name={field.name}
               value={values[field.name]}
               onChange={(event) => updateField(field.name, event.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              className="field"
             />
           )}
         </div>
@@ -89,7 +89,7 @@ export function BlogProfileForm({ profile, preset, action }: BlogProfileFormProp
 
       <button
         type="submit"
-        className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+        className="btn btn-primary"
       >
         설정 저장
       </button>

@@ -69,9 +69,10 @@ export default async function BlogProfilePage() {
 
   return (
     <section className="space-y-4">
-      <header className="rounded-md border border-slate-200 bg-white p-5">
-        <h1 className="text-lg font-semibold text-slate-900">BlogProfile 설정</h1>
-        <p className="mt-1 text-sm text-slate-600">
+      <header className="hero-card p-5">
+        <span className="badge badge-accent">Writing Profile</span>
+        <h1 className="mt-3 text-xl font-bold text-slate-900">BlogProfile 설정</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
           작성 톤/구조/금지 표현 규칙을 저장합니다. 모든 생성 요청에서 이 설정이 기본값으로 사용됩니다.
         </p>
       </header>

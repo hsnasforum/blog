@@ -38,6 +38,7 @@ model Topic {
   trendCandidates  TrendCandidate[]
   communitySignals CommunitySignal[]
   posts            Post[]
+  workflowRuns     WorkflowRun[]
 
   @@index([createdAt])
 }
@@ -72,6 +73,7 @@ model TrendCandidate {
   trendSignals         TrendSignal[]
   communitySignals     CommunitySignal[]
   officialSources      OfficialSource[]
+  workflowRuns         WorkflowRun[]
 
   @@index([topicId, totalScore(sort: Desc)])
 }
@@ -174,8 +176,56 @@ model Post {
   topic         Topic           @relation(fields: [topicId], references: [id], onDelete: Cascade)
   candidate     TrendCandidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
   blogProfile   BlogProfile?    @relation(fields: [blogProfileId], references: [id], onDelete: SetNull)
+  workflowRuns  WorkflowRun[]
 
   @@index([topicId, createdAt])
+}
+
+model WorkflowRun {
+  id               String            @id @default(cuid())
+  topicId          String?
+  candidateId      String?
+  postId           String?
+  runType          String
+  status           String            @default("queued")
+  currentStep      String?
+  currentStepLabel String?
+  progressPercent  Int               @default(0)
+  startedAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  finishedAt       DateTime?
+  errorMessage     String?
+  warningsJson     String?
+  resultJson       String?
+  topic            Topic?            @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  candidate        TrendCandidate?   @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  post             Post?             @relation(fields: [postId], references: [id], onDelete: SetNull)
+  steps            WorkflowRunStep[]
+
+  @@index([runType, status])
+  @@index([topicId, startedAt])
+  @@index([candidateId, startedAt])
+  @@index([postId, startedAt])
+}
+
+model WorkflowRunStep {
+  id             String      @id @default(cuid())
+  runId          String
+  stepKey        String
+  stepLabel      String
+  status         String      @default("pending")
+  progressWeight Int
+  sortOrder      Int
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  message        String?
+  errorMessage   String?
+  generationLogId String?
+  run            WorkflowRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, stepKey])
+  @@index([runId, sortOrder])
+  @@index([status])
 }
 
 model ProviderConfig {

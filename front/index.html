@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>로컬 블로그 자동 작성기</title>
+
+<script type="text/javascript" nonce="XOJ0BVE+zr3qdJZKBBAaLFbFzesxhK/xP1QmLnOdycs=" src="//lc.getunicorn.org?type=base-script&amp;request-id=25120"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" />
+
+<style>
+  :root {
+    --font-sans: "Pretendard Variable", Pretendard, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Apple SD Gothic Neo", sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  /* ===== Aurora theme (default — dark) ===== */
+  [data-theme="aurora"] {
+    --bg-0: oklch(0.18 0.02 270);
+    --bg-1: oklch(0.21 0.025 270);
+    --bg-2: oklch(0.24 0.03 268);
+    --surface: oklch(0.24 0.025 270 / 0.55);
+    --surface-strong: oklch(0.27 0.03 268 / 0.75);
+    --surface-hover: oklch(0.30 0.035 268 / 0.7);
+    --border: oklch(0.40 0.04 270 / 0.45);
+    --border-strong: oklch(0.55 0.06 270 / 0.55);
+    --text-1: oklch(0.97 0.01 270);
+    --text-2: oklch(0.78 0.02 270);
+    --text-3: oklch(0.62 0.025 270);
+    --text-4: oklch(0.50 0.03 270);
+    --accent: oklch(0.74 0.16 280);
+    --accent-2: oklch(0.78 0.14 200);
+    --accent-strong: oklch(0.66 0.20 285);
+    --success: oklch(0.78 0.14 155);
+    --warn: oklch(0.82 0.14 75);
+    --danger: oklch(0.72 0.18 25);
+    --info: oklch(0.78 0.13 230);
+    --glow-1: oklch(0.65 0.22 285 / 0.45);
+    --glow-2: oklch(0.72 0.18 200 / 0.4);
+    --glow-3: oklch(0.70 0.20 320 / 0.3);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.4), 0 0 0 1px var(--border) inset;
+    --shadow-md: 0 8px 24px rgba(0,0,0,.45), 0 0 0 1px var(--border) inset;
+    --shadow-lg: 0 24px 64px rgba(0,0,0,.55), 0 0 0 1px var(--border) inset;
+    --bg-noise: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.04 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
+  /* ===== Iris theme (light) ===== */
+  [data-theme="iris"] {
+    --bg-0: oklch(0.985 0.005 290);
+    --bg-1: oklch(0.97 0.008 290);
+    --bg-2: oklch(0.95 0.012 290);
+    --surface: oklch(1 0 0 / 0.7);
+    --surface-strong: oklch(1 0 0 / 0.85);
+    --surface-hover: oklch(0.97 0.008 290 / 0.9);
+    --border: oklch(0.86 0.015 290 / 0.85);
+    --border-strong: oklch(0.78 0.025 285 / 0.7);
+    --text-1: oklch(0.20 0.02 285);
+    --text-2: oklch(0.40 0.025 285);
+    --text-3: oklch(0.55 0.025 285);
+    --text-4: oklch(0.68 0.02 285);
+    --accent: oklch(0.55 0.20 285);
+    --accent-2: oklch(0.62 0.16 340);
+    --accent-strong: oklch(0.48 0.22 285);
+    --success: oklch(0.55 0.16 155);
+    --warn: oklch(0.65 0.16 60);
+    --danger: oklch(0.58 0.21 25);
+    --info: oklch(0.58 0.16 230);
+    --glow-1: oklch(0.75 0.20 285 / 0.35);
+    --glow-2: oklch(0.78 0.18 340 / 0.3);
+    --glow-3: oklch(0.80 0.16 220 / 0.3);
+    --shadow-sm: 0 1px 2px rgba(60,40,90,.06), 0 0 0 1px var(--border) inset;
+    --shadow-md: 0 12px 32px rgba(60,40,90,.08), 0 0 0 1px var(--border) inset;
+    --shadow-lg: 0 24px 64px rgba(60,40,90,.10), 0 0 0 1px var(--border) inset;
+    --bg-noise: none;
+  }
+
+  /* ===== Mono theme ===== */
+  [data-theme="mono"] {
+    --bg-0: oklch(0.16 0.005 250);
+    --bg-1: oklch(0.19 0.005 250);
+    --bg-2: oklch(0.22 0.006 250);
+    --surface: oklch(0.22 0.005 250 / 0.6);
+    --surface-strong: oklch(0.26 0.006 250 / 0.8);
+    --surface-hover: oklch(0.28 0.007 250 / 0.7);
+    --border: oklch(0.36 0.008 250 / 0.5);
+    --border-strong: oklch(0.50 0.01 250 / 0.6);
+    --text-1: oklch(0.97 0.005 250);
+    --text-2: oklch(0.78 0.008 250);
+    --text-3: oklch(0.60 0.01 250);
+    --text-4: oklch(0.46 0.012 250);
+    --accent: oklch(0.85 0.18 130);
+    --accent-2: oklch(0.78 0.10 130);
+    --accent-strong: oklch(0.78 0.20 132);
+    --success: oklch(0.85 0.18 130);
+    --warn: oklch(0.82 0.14 75);
+    --danger: oklch(0.72 0.18 25);
+    --info: oklch(0.78 0.10 230);
+    --glow-1: oklch(0.85 0.20 130 / 0.30);
+    --glow-2: oklch(0.78 0.10 250 / 0.20);
+    --glow-3: oklch(0.50 0.02 250 / 0.30);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.4), 0 0 0 1px var(--border) inset;
+    --shadow-md: 0 8px 24px rgba(0,0,0,.45), 0 0 0 1px var(--border) inset;
+    --shadow-lg: 0 24px 64px rgba(0,0,0,.55), 0 0 0 1px var(--border) inset;
+    --bg-noise: none;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg-0);
+    color: var(--text-1);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01", "tnum";
+    min-height: 100vh;
+    overflow-x: hidden;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
+  h1, h2, h3, h4, h5, h6, p, span, button, label, div { word-break: keep-all; }
+
+  /* Animated background glows */
+  .ambient {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+  }
+  .ambient::before, .ambient::after, .ambient .blob {
+    content: ""; position: absolute; border-radius: 50%;
+    filter: blur(120px); opacity: 0.55;
+  }
+  .ambient::before {
+    width: 640px; height: 640px;
+    background: var(--glow-1);
+    top: -180px; left: -120px;
+    animation: drift1 24s ease-in-out infinite alternate;
+  }
+  .ambient::after {
+    width: 540px; height: 540px;
+    background: var(--glow-2);
+    bottom: -160px; right: -120px;
+    animation: drift2 28s ease-in-out infinite alternate;
+  }
+  .ambient .blob {
+    width: 460px; height: 460px;
+    background: var(--glow-3);
+    top: 30%; left: 50%;
+    animation: drift3 32s ease-in-out infinite alternate;
+  }
+  .ambient .grain {
+    position: absolute; inset: 0;
+    background: var(--bg-noise);
+    opacity: 0.5;
+    mix-blend-mode: overlay;
+  }
+  @keyframes drift1 {
+    from { transform: translate(0,0) scale(1); }
+    to { transform: translate(120px, 80px) scale(1.15); }
+  }
+  @keyframes drift2 {
+    from { transform: translate(0,0) scale(1); }
+    to { transform: translate(-100px, -60px) scale(1.1); }
+  }
+  @keyframes drift3 {
+    from { transform: translate(-50%, 0) scale(1); }
+    to { transform: translate(-30%, -100px) scale(1.2); }
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+
+  /* Selection */
+  ::selection { background: var(--accent); color: var(--bg-0); }
+
+  /* Reusable */
+  .glass {
+    background: var(--surface);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+  }
+  .glass-strong {
+    background: var(--surface-strong);
+    backdrop-filter: blur(28px) saturate(150%);
+    -webkit-backdrop-filter: blur(28px) saturate(150%);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+  }
+
+  button { font-family: inherit; cursor: pointer; }
+  input, textarea, select { font-family: inherit; }
+
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+  /* App layout */
+  #app { position: relative; z-index: 1; min-height: 100vh; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ambient::before, .ambient::after, .ambient .blob { animation: none; }
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body data-theme="aurora">
+  <div class="ambient" aria-hidden="true">
+    <div class="blob"></div>
+    <div class="grain"></div>
+  </div>
+
+  <div id="app"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="src/icons.jsx"></script>
+  <script type="text/babel" src="src/data.jsx"></script>
+  <script type="text/babel" src="src/ui.jsx"></script>
+  <script type="text/babel" src="src/screens/dashboard.jsx"></script>
+  <script type="text/babel" src="src/screens/topic-new.jsx"></script>
+  <script type="text/babel" src="src/screens/trends.jsx"></script>
+  <script type="text/babel" src="src/screens/workflow.jsx"></script>
+  <script type="text/babel" src="src/screens/settings.jsx"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="src/app.jsx"></script>
+</body>
+</html>

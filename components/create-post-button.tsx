@@ -35,7 +35,7 @@ export function CreatePostButton({ candidateId }: { candidateId: string }) {
         type="button"
         disabled={loading}
         onClick={onClick}
-        className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+        className="btn min-h-0 px-2 py-1 text-xs disabled:opacity-60"
       >
         {loading ? "생성 중..." : "기획안 생성"}
       </button>

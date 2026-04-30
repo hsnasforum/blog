@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { ensureBlogProfile } from "@/lib/blog-profile";
+import { runAutoScoutForTopic } from "@/lib/auto-workflow/auto-scout-service";
 import { prisma } from "@/lib/prisma";
 
 const topicSchema = z.object({
@@ -9,6 +10,7 @@ const topicSchema = z.object({
   memo: z.string().optional(),
   optionalKeywords: z.string().optional(),
   avoidTopics: z.string().optional(),
+  autoScout: z.boolean().optional(),
 });
 
 export async function POST(request: Request) {
@@ -33,7 +35,14 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({ topic }, { status: 201 });
+    if (!parsed.data.autoScout) {
+      return NextResponse.json({ topic }, { status: 201 });
+    }
+
+    const autoScout = await runAutoScoutForTopic(topic.id);
+    const updatedTopic = await prisma.topic.findUnique({ where: { id: topic.id } });
+
+    return NextResponse.json({ topic: updatedTopic ?? topic, autoScout }, { status: 201 });
   } catch (error) {
     return NextResponse.json(
       { error: "토픽 생성 실패", detail: error instanceof Error ? error.message : "unknown_error" },

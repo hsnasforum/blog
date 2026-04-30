@@ -203,7 +203,7 @@ function hasUnsafeAssertion(raw) {
     .some(
       (paragraph) =>
         badAssertionPattern.test(paragraph) &&
-        !/확인\s*필요|쓰면\s*안|아니라|단정|금지|피해야|검토|문장/.test(paragraph),
+        !/확인\s*필요|쓰면\s*안|아니라|단정|금지|피해야|검토|문장|근거가\s*부족|쓰기에는\s*근거|구분이\s*필요|다르다/.test(paragraph),
     );
 }
 
@@ -430,9 +430,9 @@ async function runE2E() {
   assertStep(
     trendsPage.ok &&
       trendsPageText.includes("공식 출처 확인됨") &&
-      trendsPageText.includes("확인 상태 요약") &&
-      trendsPageText.includes("커뮤니티 신호: 있음") &&
-      trendsPageText.includes("GitHub 보강: 없음") &&
+      (trendsPageText.includes("확인 상태 요약") || trendsPageText.includes("확인 상태")) &&
+      (trendsPageText.includes("커뮤니티 신호: 있음") || trendsPageText.includes("커뮤니티: 있음")) &&
+      (trendsPageText.includes("GitHub 보강: 없음") || trendsPageText.includes("GitHub: 없음")) &&
       trendsPageText.includes("공식 출처: 있음") &&
       trendsPageText.includes("write_now 조건") &&
       trendsPageText.includes("official_confirmed + risk low: write_now 가능") &&

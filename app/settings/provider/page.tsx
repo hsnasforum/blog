@@ -15,9 +15,10 @@ export default async function ProviderSettingsPage() {
 
   return (
     <div className="space-y-4">
-      <header className="rounded-md border border-slate-200 bg-white p-5">
-        <h1 className="text-lg font-semibold text-slate-900">Provider / OAuth / Model 설정</h1>
-        <p className="mt-1 text-sm text-slate-600">
+      <header className="hero-card p-5">
+        <span className="badge badge-accent">Provider Runtime</span>
+        <h1 className="mt-3 text-xl font-bold text-slate-900">Provider / OAuth / Model 설정</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
           모델 호출 방식과 사용할 모델을 선택합니다. OAuth는 앱이 토큰을 보관하지 않고, 로컬 proxy 인증
           상태만 서버에서 확인합니다.
         </p>

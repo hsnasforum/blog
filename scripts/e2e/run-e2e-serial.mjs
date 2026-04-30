@@ -6,6 +6,8 @@ const commands = [
   ["npm", ["run", "test:e2e:official-verification"]],
   ["npm", ["run", "test:e2e:community-article"]],
   ["npm", ["run", "test:e2e:github-issues-boost"]],
+  ["npm", ["run", "test:e2e:auto-workflow"]],
+  ["npm", ["run", "test:e2e:auto-workflow-progress"]],
   ["npm", ["run", "test:e2e:provider:oauth"]],
 ];
 

@@ -47,44 +47,75 @@ export default async function Home() {
     }),
     providerConfigPromise,
   ]);
+  const stats = {
+    topics: topics.length,
+    reviewFirst: topCandidates.filter((candidate) => candidate.verdict === "review_first").length,
+    inProgress: posts.filter((post) => post.workflowStep !== "approved").length,
+    approved: posts.filter((post) => post.workflowStep === "approved").length,
+  };
 
   return (
     <div className="space-y-6">
-      <section className="rounded-md border border-slate-200 bg-white p-5">
-        <h1 className="text-lg font-semibold text-slate-900">대시보드</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          토픽 입력 → Trend Scout → 기획안/초안/검수 → 승인 단계까지 상태를 한 화면에서 확인합니다.
-        </p>
-        <div className="mt-3 grid gap-3 md:grid-cols-3">
-          <div className="rounded-md border border-slate-200 px-3 py-2">
-            <p className="text-xs text-slate-500">BlogProfile</p>
-            <p className="text-sm font-medium text-slate-900">{profile.blogName}</p>
-          </div>
-          <div className="rounded-md border border-slate-200 px-3 py-2">
-            <p className="text-xs text-slate-500">Provider</p>
-            <p className="text-sm font-medium text-slate-900">
-              {providerConfig?.provider ?? "미동기화"} ({providerConfig?.mode ?? "n/a"})
+      <section className="hero-card p-6 md:p-7">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <div className="mb-3 flex flex-wrap gap-2">
+              <span className="badge badge-accent">활성 워크스페이스</span>
+              <span className="badge">{providerConfig?.provider ?? "미동기화"} · {providerConfig?.model ?? "n/a"}</span>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
+              {profile.blogName} 글감 운영 대시보드
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              토픽 입력, Trend Scout, 커뮤니티 신호, 초안, 검수, 티스토리 Export까지
+              사람 승인 중심으로 이어지는 로컬 작성 콘솔입니다.
             </p>
           </div>
-          <div className="rounded-md border border-slate-200 px-3 py-2">
-            <p className="text-xs text-slate-500">Model</p>
-            <p className="text-sm font-medium text-slate-900">{providerConfig?.model ?? "n/a"}</p>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/topics/new" className="btn btn-primary">
+              새 토픽 만들기
+            </Link>
+            <Link href="/topics/ideas" className="btn">
+              추천 칼럼
+            </Link>
+            <Link href="/settings/provider" className="btn">
+              Provider 확인
+            </Link>
           </div>
         </div>
       </section>
 
-      <section className="rounded-md border border-slate-200 bg-white p-5">
+      <section className="grid gap-3 md:grid-cols-4">
+        <div className="glass-card p-4">
+          <p className="text-xs text-slate-500">활성 토픽</p>
+          <p className="mt-1 text-2xl font-bold text-slate-900">{stats.topics}</p>
+        </div>
+        <div className="glass-card p-4">
+          <p className="text-xs text-slate-500">검토 후 작성 후보</p>
+          <p className="mt-1 text-2xl font-bold text-blue-700">{stats.reviewFirst}</p>
+        </div>
+        <div className="glass-card p-4">
+          <p className="text-xs text-slate-500">작업 중 초안</p>
+          <p className="mt-1 text-2xl font-bold text-amber-700">{stats.inProgress}</p>
+        </div>
+        <div className="glass-card p-4">
+          <p className="text-xs text-slate-500">승인 완료</p>
+          <p className="mt-1 text-2xl font-bold text-emerald-700">{stats.approved}</p>
+        </div>
+      </section>
+
+      <section className="glass-card p-5">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">Topic 상태</h2>
+          <h2 className="section-title">Topic 상태</h2>
           <Link
             href="/topics/new"
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+            className="btn"
           >
             새 토픽 입력
           </Link>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
+          <table className="data-table text-left">
             <thead className="text-slate-500">
               <tr>
                 <th className="px-2 py-2">rawTopic</th>
@@ -116,12 +147,12 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="rounded-md border border-slate-200 bg-white p-5">
-        <h2 className="mb-3 text-base font-semibold text-slate-900">
+      <section className="glass-card p-5">
+        <h2 className="section-title mb-3">
           TrendCandidate 상위 점수 (점수순)
         </h2>
         <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
+          <table className="data-table text-left">
             <thead className="text-slate-500">
               <tr>
                 <th className="px-2 py-2">keyword</th>
@@ -151,10 +182,10 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="rounded-md border border-slate-200 bg-white p-5">
-        <h2 className="mb-3 text-base font-semibold text-slate-900">Post 워크플로우</h2>
+      <section className="glass-card p-5">
+        <h2 className="section-title mb-3">Post 워크플로우</h2>
         <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
+          <table className="data-table text-left">
             <thead className="text-slate-500">
               <tr>
                 <th className="px-2 py-2">title</th>
@@ -188,8 +219,8 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="rounded-md border border-slate-200 bg-white p-5">
-        <h2 className="mb-3 text-base font-semibold text-slate-900">GenerationLog 최근 기록</h2>
+      <section className="glass-card p-5">
+        <h2 className="section-title mb-3">GenerationLog 최근 기록</h2>
         <ul className="space-y-2 text-sm">
           {logs.map((log) => (
             <li key={log.id} className="rounded-md border border-slate-200 px-3 py-2">
